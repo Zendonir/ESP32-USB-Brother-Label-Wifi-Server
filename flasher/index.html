@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brother Printserver – Firmware flashen</title>
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --text: #1d2330; --muted: #5f6b7a;
+    --border: #dde1e7; --accent: #0b5cad; --warn: #b35900; --code: #f0f2f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c; --card: #1d2128; --text: #e6e9ee; --muted: #9aa4b2;
+      --border: #2e343e; --accent: #5aa2ec; --warn: #f0a04b; --code: #252a33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+          padding: 18px 20px; margin-bottom: 16px; }
+  .warn { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--card)); }
+  .install { text-align: center; padding: 28px 20px; }
+  .version { color: var(--muted); font-size: .9rem; margin-top: 10px; }
+  ol, ul { padding-left: 22px; margin: 6px 0; }
+  li { margin-bottom: 6px; }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+  pre { background: var(--code); padding: 10px; border-radius: 6px; overflow-x: auto; font-size: .85rem; }
+  a { color: var(--accent); }
+  esp-web-install-button button, .fallback-btn {
+    font: inherit; font-size: 1.05rem; padding: 10px 22px; border-radius: 8px; cursor: pointer;
+    border: none; background: var(--accent); color: #fff;
+  }
+  footer { color: var(--muted); font-size: .85rem; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Brother TD-2020A WLAN-Printserver</h1>
+  <p class="sub">Firmware für den ESP32-S3 direkt im Browser flashen</p>
+
+  <div class="card warn">
+    <strong>Entwicklungsstand: Phase 2 – USB-Diagnose.</strong>
+    Diese Firmware druckt noch nicht. Sie erkennt den Drucker und zeigt alle USB-Daten an.
+    Sie ist kompiliert und automatisch getestet, aber <strong>noch nicht auf echter Hardware erprobt</strong>.
+  </div>
+
+  <div class="card install">
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">Firmware installieren</button>
+      <span slot="unsupported">
+        Ihr Browser unterstützt kein Web Serial. Bitte <strong>Chrome</strong> oder <strong>Edge</strong>
+        am Desktop verwenden (nicht Firefox/Safari, nicht mobil).
+      </span>
+      <span slot="not-allowed">Web Serial benötigt HTTPS – bitte die Seite über https:// öffnen.</span>
+    </esp-web-install-button>
+    <div class="version" id="version">Version wird geladen…</div>
+  </div>
+
+  <div class="card">
+    <h2>So geht's</h2>
+    <ol>
+      <li>Board über den <strong>UART-/COM-USB-C-Port</strong> mit dem PC verbinden – <em>nicht</em> über den
+        nativen USB-Port (dort kommt später der Drucker hin).</li>
+      <li>Treiber für den USB-UART-Wandler muss installiert sein (CH340/CH343 bzw. CP210x).
+        Unter Windows 11 meist automatisch.</li>
+      <li><strong>Firmware installieren</strong> klicken und den seriellen Port auswählen.</li>
+      <li>Bei der ersten Installation <strong>„Gerät löschen“ bestätigen</strong>. Bei einem Update
+        nicht löschen – dann bleiben WLAN-Daten und Setup-Passwort erhalten.</li>
+      <li>Schlägt die Verbindung fehl: <strong>BOOT</strong> gedrückt halten, <strong>RESET</strong> kurz
+        drücken, BOOT loslassen und erneut versuchen.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Nach dem Flashen</h2>
+    <ol>
+      <li>Im Installationsdialog <strong>„Logs &amp; Konsole“</strong> öffnen (115200 Baud). Dort erscheint beim
+        Start das Setup-WLAN mit seinem individuellen Passwort:
+        <pre>  Setup Wi-Fi   SSID    : Brother-PrintServer-Setup-XXXX
+                Password: ************
+                URL     : http://192.168.4.1/</pre>
+        Mit Enter erscheint die Eingabeaufforderung <code>printserver&gt;</code>; <code>ap_info</code> zeigt die
+        Daten erneut an.
+      </li>
+      <li>Mit dem Setup-WLAN verbinden, <code>http://192.168.4.1/</code> öffnen und unter <strong>WLAN</strong>
+        Ihr Heimnetz eintragen. Danach erreichbar unter <code>http://brother-td2020.local/</code>.</li>
+      <li>Drucker über USB-OTG-Adapter am <strong>nativen</strong> USB-Port anschließen und den USB-Bericht im
+        Reiter <strong>USB-Diagnose</strong> (oder mit <code>usb</code> in der Konsole) abrufen.</li>
+    </ol>
+    <p>Wichtig vor dem Anschließen des Druckers: die 5-V-Versorgung (VBUS) am OTG-Adapter prüfen –
+      siehe <a id="wiring" href="#">Anleitung zur USB-Verkabelung</a>.</p>
+  </div>
+
+  <div class="card">
+    <h2>Alternativ: manuell flashen</h2>
+    <p>Alle Dateien (inkl. Merged-Image und Prüfsummen) gibt es bei den
+      <a id="releases" href="#">GitHub-Releases</a>. Mit esptool:</p>
+    <pre>python -m esptool --chip esp32s3 -p COM5 -b 460800 write_flash \
+  0x0 bootloader.bin 0x8000 partition-table.bin \
+  0x19000 ota_data_initial.bin 0x20000 brother_printserver.bin</pre>
+  </div>
+
+  <footer>
+    <a id="repo" href="#">Quellcode auf GitHub</a> · MIT-Lizenz ·
+    Flasher: <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>
+  </footer>
+</main>
+<script>
+  // Repository links derived from the GitHub Pages URL (<owner>.github.io/<repo>/).
+  (function () {
+    const owner = location.hostname.split('.')[0];
+    const repo = location.pathname.split('/').filter(Boolean)[0] || '';
+    const base = 'https://github.com/' + owner + '/' + repo;
+    document.getElementById('repo').href = base;
+    document.getElementById('releases').href = base + '/releases';
+    document.getElementById('wiring').href = base + '/blob/HEAD/docs/usb-verkabelung.md';
+  })();
+  fetch('manifest.json', { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((m) => {
+      document.getElementById('version').textContent = 'Version ' + m.version + ' · ' + m.builds[0].chipFamily;
+    })
+    .catch(() => { document.getElementById('version').textContent = 'Manifest nicht gefunden.'; });
+</script>
+</body>
+</html>

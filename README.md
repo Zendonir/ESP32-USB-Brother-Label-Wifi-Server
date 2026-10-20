@@ -1,5 +1,10 @@
 # ESP32-S3 WLAN-Printserver für Brother TD-2020A
 
+[![Firmware](https://github.com/Zendonir/ESP32-USB-Brother-Label-Wifi-Server/actions/workflows/firmware.yml/badge.svg)](https://github.com/Zendonir/ESP32-USB-Brother-Label-Wifi-Server/actions/workflows/firmware.yml)
+
+**➜ Firmware direkt im Browser flashen: <https://zendonir.github.io/ESP32-USB-Brother-Label-Wifi-Server/>**
+(Chrome oder Edge am Desktop, Board über den UART/COM-Port anschließen)
+
 Open-Source-Firmware (ESP-IDF, C), die einen Brother TD-2020A Etikettendrucker per USB an einen
 ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
 
@@ -101,6 +106,21 @@ Optionen (`idf.py menuconfig`):
 
 ## Flashen
 
+### Im Browser (ohne Installation)
+
+<https://zendonir.github.io/ESP32-USB-Brother-Label-Wifi-Server/> öffnen (Chrome/Edge), Board am
+**UART/COM-Port** anschließen, „Firmware installieren“. Bei der Erstinstallation „Gerät löschen“
+bestätigen, bei Updates nicht – dann bleiben die WLAN-Daten erhalten. Über „Logs & Konsole“ im
+Dialog sehen Sie die serielle Ausgabe (Setup-Passwort, USB-Bericht) direkt im Browser.
+
+### Fertige Dateien
+
+GitHub Actions baut die Firmware bei jedem Push (ESP-IDF 5.5.6 und zur Kontrolle 6.1). Die Dateien
+liegen als Artefakt am jeweiligen Lauf unter *Actions*. Für ein Git-Tag `v*` (z. B. `v0.2.0-diag`)
+entsteht automatisch ein **GitHub-Release** mit allen Images, `manifest.json` und `SHA256SUMS`.
+
+### Mit ESP-IDF
+
 Board über den **UART/COM-Port** mit dem PC verbinden:
 
 ```bash
@@ -111,14 +131,15 @@ Klappt der automatische Download-Modus nicht: **BOOT** gedrückt halten, **RESET
 BOOT loslassen, dann flashen. Der native USB-Port ist nach dem Flashen USB-Host und steht nicht
 mehr zum Flashen zur Verfügung.
 
-Ohne ESP-IDF (fertiges Image, Offset 0x0):
+Mit esptool und den Release-Dateien (WLAN-Daten bleiben erhalten):
 
 ```bash
-python -m esptool --chip esp32s3 -p COM5 -b 460800 write_flash 0x0 brother_printserver-merged.bin
+python -m esptool --chip esp32s3 -p COM5 -b 460800 write_flash \
+  0x0 bootloader.bin 0x8000 partition-table.bin 0x19000 ota_data_initial.bin 0x20000 brother_printserver.bin
 ```
 
-Ein Merged-Image erzeugen Sie selbst mit `idf.py merge-bin` (liegt dann unter
-`build/merged-binary.bin`).
+Das `*-merged.bin` aus dem Release wird an Offset 0x0 geschrieben, überschreibt dabei aber auch
+den NVS-Bereich (WLAN-Daten, Setup-Passwort).
 
 ## Ersteinrichtung (WLAN)
 
@@ -216,6 +237,9 @@ Vollständige Spezifikation: [docs/openapi.yaml](docs/openapi.yaml). Die Druck-E
 │   └── common_util/       String-/JSON-Builder
 ├── web/                   index.html, style.css, app.js (in die Firmware eingebettet)
 ├── tests/host/            Unit-Tests für den Deskriptor-Parser (läuft auf dem PC)
+├── flasher/               Browser-Flasher-Seite (GitHub Pages, ESP Web Tools)
+├── tools/                 package_firmware.py (Images, manifest.json, Prüfsummen)
+├── .github/workflows/     CI: Build, Tests, Release, Pages
 └── docs/                  Analyse, Verkabelung, Testplan, Einschränkungen, OpenAPI
 ```
 

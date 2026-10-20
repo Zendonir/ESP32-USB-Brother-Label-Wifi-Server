@@ -6,3 +6,5 @@ sdkconfig.old
 .vscode/
 tests/host/build/
 docs/vendor/
+dist/
+site/
