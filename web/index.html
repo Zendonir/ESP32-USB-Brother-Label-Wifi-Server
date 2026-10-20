@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brother Print Server – Diagnose</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1 data-i18n="title">Brother TD-2020A Printserver</h1>
+    <span class="badge" data-i18n="phase">Phase 2 · USB-Diagnose</span>
+  </div>
+  <nav>
+    <button class="tab active" data-tab="dash" data-i18n="tab_dash">Übersicht</button>
+    <button class="tab" data-tab="usb" data-i18n="tab_usb">USB-Diagnose</button>
+    <button class="tab" data-tab="wifi" data-i18n="tab_wifi">WLAN</button>
+    <button class="tab" data-tab="log" data-i18n="tab_log">Log</button>
+    <button class="tab" data-tab="sys" data-i18n="tab_sys">System</button>
+    <button id="lang" class="lang" title="Sprache / Language">EN</button>
+  </nav>
+</header>
+
+<main>
+  <div id="conn-err" class="alert hidden" data-i18n="conn_err">Keine Verbindung zum Gerät.</div>
+
+  <!-- Dashboard -->
+  <section id="tab-dash" class="panel">
+    <div class="grid">
+      <div class="card">
+        <h2 data-i18n="printer">Drucker</h2>
+        <div class="big" id="d-printer">–</div>
+        <dl>
+          <dt>VID / PID</dt><dd id="d-vidpid">–</dd>
+          <dt data-i18n="product">Produkt</dt><dd id="d-product">–</dd>
+          <dt data-i18n="usb_class">USB-Klasse</dt><dd id="d-class">–</dd>
+          <dt data-i18n="connects">Verbindungen</dt><dd id="d-connects">–</dd>
+          <dt data-i18n="last_error">Letzter Fehler</dt><dd id="d-lasterr">–</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2 data-i18n="wifi">WLAN</h2>
+        <div class="big" id="d-wifi">–</div>
+        <dl>
+          <dt>SSID</dt><dd id="d-ssid">–</dd>
+          <dt data-i18n="ip">IP-Adresse</dt><dd id="d-ip">–</dd>
+          <dt>RSSI</dt><dd id="d-rssi">–</dd>
+          <dt data-i18n="hostname">Hostname</dt><dd id="d-host">–</dd>
+          <dt data-i18n="setup_ap">Setup-AP</dt><dd id="d-ap">–</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2 data-i18n="system">System</h2>
+        <div class="big" id="d-version">–</div>
+        <dl>
+          <dt>ESP-IDF</dt><dd id="d-idf">–</dd>
+          <dt data-i18n="uptime">Laufzeit</dt><dd id="d-uptime">–</dd>
+          <dt data-i18n="reset">Letzter Reset</dt><dd id="d-reset">–</dd>
+          <dt data-i18n="ram">RAM frei (min)</dt><dd id="d-ram">–</dd>
+          <dt>PSRAM</dt><dd id="d-psram">–</dd>
+        </dl>
+      </div>
+    </div>
+    <p class="hint" data-i18n="phase_hint">Diese Firmware ist der Diagnosestand (Phase 2): Sie erkennt den Drucker und liest
+      alle USB-Deskriptoren aus. Druckfunktionen (Port 9100, REST-Druck, Warteschlange) folgen in den nächsten Phasen.</p>
+  </section>
+
+  <!-- USB -->
+  <section id="tab-usb" class="panel hidden">
+    <div class="toolbar">
+      <button id="usb-refresh" data-i18n="usb_refresh">Status neu abfragen</button>
+      <a class="button secondary" href="/api/usb" download="usb-report.json" data-i18n="dl_json">JSON herunterladen</a>
+      <a class="button secondary" href="/api/usb/text" download="usb-report.txt" data-i18n="dl_text">Text herunterladen</a>
+    </div>
+    <div id="usb-none" class="alert hidden" data-i18n="usb_none">Seit dem Start wurde kein USB-Gerät erkannt.
+      Prüfen Sie Verkabelung, OTG-Adapter und die 5-V-VBUS-Versorgung (siehe README).</div>
+    <div id="usb-content" class="hidden">
+      <div class="grid">
+        <div class="card">
+          <h2 data-i18n="device">Gerät</h2>
+          <dl id="usb-device"></dl>
+        </div>
+        <div class="card">
+          <h2 data-i18n="analysis">Analyse</h2>
+          <dl id="usb-analysis"></dl>
+        </div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="interfaces">Interfaces &amp; Endpoints</h2>
+        <div id="usb-ifs"></div>
+      </div>
+      <div class="card">
+        <h2>IEEE 1284 Device ID</h2>
+        <pre id="usb-devid">–</pre>
+        <dl id="usb-devid-fields"></dl>
+      </div>
+      <div class="card">
+        <h2 data-i18n="full_report">Vollständiger Bericht</h2>
+        <pre id="usb-text"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Wi-Fi -->
+  <section id="tab-wifi" class="panel hidden">
+    <div class="card narrow">
+      <h2 data-i18n="wifi_setup">WLAN einrichten</h2>
+      <p id="wifi-locked" class="alert hidden" data-i18n="wifi_locked">Aus Sicherheitsgründen können die WLAN-Daten nur geändert
+        werden, wenn Sie mit dem Setup-WLAN des Geräts verbunden sind (oder über die serielle Konsole: <code>wifi_set</code>).</p>
+      <form id="wifi-form">
+        <label>SSID <input name="ssid" maxlength="32" required autocomplete="off"></label>
+        <label><span data-i18n="password">Passwort</span>
+          <input name="password" type="password" maxlength="64" autocomplete="new-password"></label>
+        <button type="submit" data-i18n="save_connect">Speichern &amp; verbinden</button>
+      </form>
+      <p id="wifi-msg" class="hint"></p>
+    </div>
+  </section>
+
+  <!-- Log -->
+  <section id="tab-log" class="panel hidden">
+    <div class="toolbar">
+      <label class="inline"><input type="checkbox" id="log-auto" checked> <span data-i18n="auto_refresh">Automatisch aktualisieren</span></label>
+      <button id="log-refresh" class="secondary" data-i18n="refresh">Aktualisieren</button>
+    </div>
+    <pre id="log" class="log"></pre>
+  </section>
+
+  <!-- System -->
+  <section id="tab-sys" class="panel hidden">
+    <div class="card narrow">
+      <h2 data-i18n="system">System</h2>
+      <p class="hint" data-i18n="restart_hint">Neustart ist in dieser Phase nur über das Setup-WLAN oder die serielle Konsole erlaubt.</p>
+      <button id="restart" class="danger" data-i18n="restart">Neustart</button>
+      <p id="sys-msg" class="hint"></p>
+      <h3>API</h3>
+      <ul class="api">
+        <li><code>GET /api/health</code></li>
+        <li><code>GET /api/status</code></li>
+        <li><code>GET /api/usb</code> · <code>GET /api/usb/text</code> · <code>POST /api/usb/refresh</code></li>
+        <li><code>GET /api/log</code></li>
+        <li><code>POST /api/wifi</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
+        <li><code>POST /api/system/restart</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
+        <li id="api-raw" class="hidden"><code>POST /api/diag/raw</code> <span data-i18n="raw_hint">(Entwicklungsfunktion, aktiviert)</span></li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer><span id="f-version"></span></footer>
+<script src="/app.js"></script>
+</body>
+</html>

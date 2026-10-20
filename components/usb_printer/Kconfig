@@ -1,0 +1,24 @@
+menu "USB printer transport"
+
+    config USB_PRINTER_DUMP_ON_CONNECT
+        bool "Print the full USB descriptor report on the console when a device is attached"
+        default y
+
+    config USB_PRINTER_ALLOW_VENDOR_INTERFACE
+        bool "Also claim a vendor-specific (class 0xFF) interface with bulk OUT"
+        default n
+        help
+            By default only a standard USB Printer Class interface (0x07/0x01) is
+            claimed for print data. Enable this only after the diagnostic report
+            of the real device has shown that print data must go to a
+            vendor-specific interface.
+
+    config USB_PRINTER_BULK_CHUNK_SIZE
+        int "Bulk OUT transfer chunk size (bytes)"
+        range 512 65536
+        default 16384
+        help
+            Size of the DMA buffer used for one bulk OUT transfer. Larger print
+            jobs are sent in several chunks of this size.
+
+endmenu

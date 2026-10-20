@@ -1,0 +1,20 @@
+menu "Brother print server"
+
+    config APP_DEFAULT_HOSTNAME
+        string "Default hostname (mDNS: <hostname>.local)"
+        default "brother-td2020"
+
+    config APP_RESET_BUTTON_GPIO
+        int "GPIO of the button that resets Wi-Fi settings when held for 5 s (-1 = off)"
+        range -1 48
+        default 0
+        help
+            GPIO0 is the BOOT button on ESP32-S3-DevKitC-1 compatible boards.
+            Holding it during power-up enters the ROM download mode instead.
+
+    config APP_LOG_BUFFER_SIZE
+        int "Size of the in-RAM log buffer shown in the web interface (bytes)"
+        range 4096 262144
+        default 32768
+
+endmenu

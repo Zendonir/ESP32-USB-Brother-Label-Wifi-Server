@@ -1,0 +1,7 @@
+## ESP-IDF >= 6.0 no longer ships the USB Host Library; it comes from the
+## component registry instead. ESP-IDF 5.5 uses its built-in "usb" component.
+dependencies:
+  espressif/usb:
+    version: "^1.6.0"
+    rules:
+      - if: "idf_version >=6.0"

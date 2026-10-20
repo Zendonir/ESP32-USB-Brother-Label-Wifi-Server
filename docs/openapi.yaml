@@ -1,0 +1,225 @@
+openapi: 3.0.3
+info:
+  title: Brother TD-2020A Print Server – Diagnostic API (phase 2)
+  version: 0.2.0-diag
+  description: |
+    Read-only diagnostic API of the phase 2 firmware. Print endpoints
+    (/api/print/*, /api/jobs) and API-key authentication follow in phase 5/7.
+    Write endpoints are only accepted through the setup access point
+    (requests whose local address is 192.168.4.1).
+servers:
+  - url: http://brother-td2020.local
+  - url: http://192.168.4.1
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  uptime_s: { type: integer }
+                  printer_ready: { type: boolean }
+  /api/status:
+    get:
+      summary: Firmware, Wi-Fi, memory and printer summary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Status' }
+  /api/usb:
+    get:
+      summary: Full USB descriptor report of the attached (or last seen) device
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsbReport' }
+  /api/usb/text:
+    get:
+      summary: Same report as human-readable text (identical to the serial console output)
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain: {}
+  /api/usb/refresh:
+    post:
+      summary: Re-run the USB Printer Class requests GET_DEVICE_ID and GET_PORT_STATUS
+      description: Read-only towards the printer; returns the updated report.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsbReport' }
+        '409':
+          description: No device connected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+  /api/log:
+    get:
+      summary: Buffered log output (most recent ~32 KiB). Never contains passwords.
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain: {}
+  /api/wifi:
+    post:
+      summary: Store Wi-Fi station credentials and connect (setup AP only)
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [ssid]
+              properties:
+                ssid: { type: string, minLength: 1, maxLength: 32 }
+                password: { type: string, description: empty (open network) or 8-64 characters }
+      responses:
+        '200': { description: Stored, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        '400': { description: Invalid input, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        '403': { description: Not connected through the setup AP, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+  /api/system/restart:
+    post:
+      summary: Restart the device (setup AP only)
+      responses:
+        '200': { description: Restarting, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        '403': { description: Not connected through the setup AP, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+  /api/diag/raw:
+    post:
+      summary: "DEVELOPMENT ONLY (Kconfig DIAG_ENABLE_RAW_SEND, default off): forward body unchanged to bulk OUT"
+      description: |
+        Only registered when the firmware was built with CONFIG_DIAG_ENABLE_RAW_SEND=y.
+        No authentication, no queue. A successful USB acknowledgement does not confirm
+        a physical print.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '200':
+          description: All bytes acknowledged by the USB device
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RawResult' }
+        '409': { description: Printer not ready }
+        '413': { description: Empty or too large }
+        '502':
+          description: USB transfer failed or incomplete
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RawResult' }
+components:
+  schemas:
+    Message:
+      type: object
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+    RawResult:
+      type: object
+      properties:
+        ok: { type: boolean }
+        bytes_expected: { type: integer }
+        bytes_received: { type: integer }
+        bytes_acknowledged_by_usb: { type: integer }
+        usb_result: { type: string, example: ESP_OK }
+        note: { type: string }
+    Status:
+      type: object
+      properties:
+        firmware:
+          type: object
+          properties:
+            name: { type: string }
+            version: { type: string }
+            idf: { type: string }
+            build: { type: string }
+            phase: { type: string }
+        uptime_s: { type: integer }
+        reset_reason: { type: string }
+        memory:
+          type: object
+          properties:
+            internal_free: { type: integer }
+            internal_min_free: { type: integer }
+            internal_largest_block: { type: integer }
+            psram_free: { type: integer }
+            psram_total: { type: integer }
+        wifi:
+          type: object
+          properties:
+            sta_configured: { type: boolean }
+            sta_connected: { type: boolean }
+            ssid: { type: string }
+            ip: { type: string }
+            gateway: { type: string }
+            rssi: { type: integer }
+            last_disconnect_reason: { type: integer }
+            ap_active: { type: boolean }
+            ap_ssid: { type: string }
+            ap_ip: { type: string }
+            ap_clients: { type: integer }
+            hostname: { type: string }
+            via_setup_ap: { type: boolean }
+        printer:
+          type: object
+          properties:
+            connected: { type: boolean }
+            ready: { type: boolean, description: printer interface claimed and bulk OUT available }
+            is_printer_class: { type: boolean }
+            vid: { type: string, example: '0x04f9' }
+            pid: { type: string }
+            manufacturer: { type: string }
+            product: { type: string }
+            connect_count: { type: integer }
+            bytes_written_total: { type: integer }
+            write_errors_total: { type: integer }
+            last_error: { type: string }
+        features:
+          type: object
+          properties:
+            raw_send: { type: boolean }
+            raw_send_max_bytes: { type: integer }
+    UsbReport:
+      type: object
+      description: All values are taken from the real device. `raw` fields are lowercase hex.
+      properties:
+        valid: { type: boolean, description: false until a device was enumerated }
+        connected: { type: boolean }
+        connect_count: { type: integer }
+        address: { type: integer }
+        speed: { type: string, enum: [low, full, high, unknown] }
+        active_configuration: { type: integer }
+        device: { type: object, additionalProperties: true }
+        strings: { type: object, additionalProperties: true }
+        configuration:
+          type: object
+          additionalProperties: true
+          properties:
+            raw: { type: string }
+            chain_error: { type: string, nullable: true }
+            interfaces:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+                properties:
+                  endpoints: { type: array, items: { type: object, additionalProperties: true } }
+                  extra_descriptors: { type: array, items: { type: object, additionalProperties: true } }
+        printer_interface: { type: object, additionalProperties: true }
+        ieee1284: { type: object, additionalProperties: true }
+        port_status: { type: object, additionalProperties: true }

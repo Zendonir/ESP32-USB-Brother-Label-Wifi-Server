@@ -1,0 +1,12 @@
+# Brother print server - 16 MB flash (ESP32-S3 N16R8)
+# Two OTA slots (no factory app) so later phases can update over Wi-Fi without
+# changing the partition table. "storage" is reserved for templates/settings
+# backups in later phases, "coredump" keeps crash information.
+# Name,    Type, SubType,  Offset,   Size
+nvs,       data, nvs,      0x9000,   0x10000
+otadata,   data, ota,      0x19000,  0x2000
+phy_init,  data, phy,      0x1b000,  0x1000
+ota_0,     app,  ota_0,    0x20000,  0x400000
+ota_1,     app,  ota_1,    0x420000, 0x400000
+storage,   data, spiffs,   0x820000, 0x7d0000
+coredump,  data, coredump, 0xff0000, 0x10000

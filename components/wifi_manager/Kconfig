@@ -1,0 +1,15 @@
+menu "Wi-Fi manager"
+
+    config WIFI_MGR_AP_SSID_PREFIX
+        string "Setup access point SSID prefix"
+        default "Brother-PrintServer-Setup"
+        help
+            The last two bytes of the MAC address are appended, e.g.
+            Brother-PrintServer-Setup-A1B2.
+
+    config WIFI_MGR_FALLBACK_AP_DELAY_S
+        int "Start setup AP if station is not connected after (seconds)"
+        range 30 3600
+        default 120
+
+endmenu
