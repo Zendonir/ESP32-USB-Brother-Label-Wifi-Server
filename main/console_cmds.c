@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "app_network.h"
 #include "diag_log.h"
 #include "esp_console.h"
 #include "esp_heap_caps.h"
@@ -91,6 +92,14 @@ static int cmd_wifi_clear(int argc, char **argv)
     return 0;
 }
 
+static int cmd_wifi_start(int argc, char **argv)
+{
+    esp_err_t err = app_start_network();
+    printf("%s\n", err == ESP_OK ? "Wi-Fi started" :
+           err == ESP_ERR_INVALID_STATE ? "Wi-Fi is already running" : esp_err_to_name(err));
+    return err == ESP_OK ? 0 : 1;
+}
+
 static int cmd_ap_info(int argc, char **argv)
 {
     wifi_mgr_print_ap_credentials();
@@ -160,6 +169,8 @@ void console_start(void)
           .func = cmd_wifi_set },
         { .command = "wifi_clear", .help = "Erase Wi-Fi credentials and restart into setup AP mode",
           .func = cmd_wifi_clear },
+        { .command = "wifi_start", .help = "Start Wi-Fi and web server (after a safe-mode boot)",
+          .func = cmd_wifi_start },
         { .command = "ap_info", .help = "Show SSID and password of the setup access point", .func = cmd_ap_info },
         { .command = "log", .help = "Print the buffered log (as shown in the web interface)", .func = cmd_log },
         { .command = "log_level", .hint = "<tag|*> <level>", .help = "Change the log level at runtime",

@@ -20,6 +20,7 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 | ID | Test (entspricht Prompt-Punkt) | Durchführung | Erwartet | Status |
 |---|---|---|---|---|
 | B1 | Start ohne Drucker (1) | Board ohne USB-Gerät starten | Banner mit Setup-WLAN, `USB host started`, kein Absturz; `/api/status` → `printer.connected=false` | ⏳ |
+| B1a | Brownout-Schutz | Board an schwacher Versorgung starten | nach 2 Brownouts `SAFE MODE`, Konsole/`usb` nutzbar, `wifi_start` startet WLAN | ⏳ |
 | B2 | VBUS-Messung | siehe usb-verkabelung.md | 4,7–5,2 V am Adapter | ⏳ |
 | B3 | Drucker nachträglich anschließen (2) | Drucker an, Kabel stecken | `device attached …`, vollständiger Bericht auf der Konsole und unter „USB-Diagnose“ | ⏳ |
 | B4 | Deskriptoren vollständig | Bericht prüfen | Device-, Config-, Interface-, Endpoint-Deskriptoren + Rohdaten-Hexdump; keine `WARNING: descriptor chain` | ⏳ |

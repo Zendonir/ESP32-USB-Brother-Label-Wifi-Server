@@ -57,7 +57,7 @@ jobs:
           elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             v="${GITHUB_REF_NAME#v}"
           else
-            v="0.2.0-diag-${GITHUB_SHA::7}"
+            v="0.2.1-diag-${GITHUB_SHA::7}"
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
 

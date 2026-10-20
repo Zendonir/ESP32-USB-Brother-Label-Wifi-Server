@@ -9,11 +9,13 @@
 #include <string.h>
 
 #include "app_config.h"
+#include "app_network.h"
 #include "console_cmds.h"
 #include "diag_log.h"
 #include "driver/gpio.h"
 #include "esp_app_desc.h"
 #include "esp_log.h"
+#include "esp_attr.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -26,6 +28,21 @@
 
 static const char *TAG = "main";
 
+/*
+ * Brownout tracking. The RF calibration at Wi-Fi start draws current peaks of
+ * several hundred mA; with a weak USB supply the chip resets right there and
+ * would loop forever. After repeated brownout resets the firmware starts
+ * without Wi-Fi so that the USB diagnostics on the serial console still work.
+ * RTC_NOINIT memory survives software and brownout resets but not power-on.
+ */
+#define BROWNOUT_MAGIC          0xB0D0C0DEu
+#define BROWNOUT_SAFE_MODE_AT   2
+static RTC_NOINIT_ATTR uint32_t s_brownout_magic;
+static RTC_NOINIT_ATTR uint32_t s_brownout_count;
+
+static bool s_network_started;
+static char s_hostname[33];
+
 static void start_mdns(const char *hostname)
 {
     esp_err_t err = mdns_init();
@@ -37,6 +54,41 @@ static void start_mdns(const char *hostname)
     mdns_instance_name_set("Brother TD-2020A Print Server");
     mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
     ESP_LOGI(TAG, "mDNS: http://%s.local/", hostname);
+}
+
+esp_err_t app_start_network(void)
+{
+    if (s_network_started) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_err_t err = wifi_mgr_start(s_hostname);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Wi-Fi start failed: %s", esp_err_to_name(err));
+        return err;
+    }
+    s_network_started = true;
+    start_mdns(s_hostname);
+    err = web_server_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "web server start failed: %s", esp_err_to_name(err));
+    }
+    return ESP_OK;
+}
+
+static bool update_brownout_counter(void)
+{
+    if (s_brownout_magic != BROWNOUT_MAGIC) {
+        s_brownout_magic = BROWNOUT_MAGIC;
+        s_brownout_count = 0;
+    }
+    if (esp_reset_reason() == ESP_RST_BROWNOUT) {
+        s_brownout_count++;
+        ESP_LOGW(TAG, "last reset was a BROWNOUT (supply voltage dropped), %lu in a row",
+                 (unsigned long)s_brownout_count);
+    } else {
+        s_brownout_count = 0;
+    }
+    return s_brownout_count >= BROWNOUT_SAFE_MODE_AT;
 }
 
 #if CONFIG_APP_RESET_BUTTON_GPIO >= 0
@@ -80,16 +132,21 @@ void app_main(void)
         ESP_LOGE(TAG, "USB host start failed: %s", esp_err_to_name(err));
     }
 
-    char hostname[33];
-    if (cfg_get_str(CFG_NS_SYSTEM, "hostname", hostname, sizeof(hostname)) != ESP_OK || !hostname[0]) {
-        strlcpy(hostname, CONFIG_APP_DEFAULT_HOSTNAME, sizeof(hostname));
+    if (cfg_get_str(CFG_NS_SYSTEM, "hostname", s_hostname, sizeof(s_hostname)) != ESP_OK || !s_hostname[0]) {
+        strlcpy(s_hostname, CONFIG_APP_DEFAULT_HOSTNAME, sizeof(s_hostname));
     }
-    ESP_ERROR_CHECK(wifi_mgr_start(hostname));
-    start_mdns(hostname);
 
-    err = web_server_start();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "web server start failed: %s", esp_err_to_name(err));
+    bool safe_mode = update_brownout_counter();
+    if (safe_mode) {
+        ESP_LOGE(TAG, "SAFE MODE: %lu brownout resets in a row - Wi-Fi NOT started.",
+                 (unsigned long)s_brownout_count);
+        ESP_LOGE(TAG, "The power supply cannot deliver the Wi-Fi current peaks. Use another USB port/cable "
+                      "or a 5 V supply >= 1 A. USB diagnostics work on this console ('usb'); "
+                      "'wifi_start' tries Wi-Fi anyway.");
+        /* Next reset gets a fresh chance (unless it is a brownout again). */
+        s_brownout_count = BROWNOUT_SAFE_MODE_AT - 1;
+    } else {
+        ESP_ERROR_CHECK(app_start_network());
     }
 
 #if CONFIG_APP_RESET_BUTTON_GPIO >= 0
@@ -100,4 +157,10 @@ void app_main(void)
     esp_ota_mark_app_valid_cancel_rollback();
 
     console_start();
+
+    if (!safe_mode) {
+        /* Wi-Fi survived its start-up: forget earlier brownouts. */
+        vTaskDelay(pdMS_TO_TICKS(10000));
+        s_brownout_count = 0;
+    }
 }

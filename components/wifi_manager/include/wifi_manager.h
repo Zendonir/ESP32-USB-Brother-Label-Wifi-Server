@@ -36,10 +36,12 @@ typedef struct {
     char hostname[33];
 } wifi_mgr_status_t;
 
+/* Returns ESP_ERR_INVALID_STATE if already started. */
 esp_err_t wifi_mgr_start(const char *hostname);
+bool wifi_mgr_is_started(void);
 void wifi_mgr_get_status(wifi_mgr_status_t *out);
 
-/* Stores new station credentials and (re)connects. Password may be empty (open network). */
+/* Stores new station credentials and (re)connects (only stores them while Wi-Fi is not started). Password may be empty (open network). */
 esp_err_t wifi_mgr_set_credentials(const char *ssid, const char *password);
 esp_err_t wifi_mgr_clear_credentials(void);
 

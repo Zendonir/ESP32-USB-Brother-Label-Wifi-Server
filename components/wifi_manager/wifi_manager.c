@@ -33,6 +33,7 @@ static esp_timer_handle_t s_reconnect_timer;
 static esp_timer_handle_t s_fallback_timer;
 static esp_timer_handle_t s_ap_stop_timer;
 static uint32_t s_backoff_ms = 1000;
+static bool s_started;
 
 /* ------------------------------------------------------------------------- */
 
@@ -228,6 +229,9 @@ static void apply_sta_config(const char *ssid, const char *pass)
 
 esp_err_t wifi_mgr_start(const char *hostname)
 {
+    if (s_started) {
+        return ESP_ERR_INVALID_STATE;
+    }
     s_lock = xSemaphoreCreateMutex();
     if (!s_lock) {
         return ESP_ERR_NO_MEM;
@@ -282,14 +286,24 @@ esp_err_t wifi_mgr_start(const char *hostname)
     }
     memset(pass, 0, sizeof(pass));
     ESP_ERROR_CHECK(esp_wifi_start());
+    s_started = true;
     if (s_st.ap_active) {
         wifi_mgr_print_ap_credentials();
     }
     return ESP_OK;
 }
 
+bool wifi_mgr_is_started(void)
+{
+    return s_started;
+}
+
 void wifi_mgr_get_status(wifi_mgr_status_t *out)
 {
+    if (!s_started) {
+        memset(out, 0, sizeof(*out));
+        return;
+    }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     *out = s_st;
     xSemaphoreGive(s_lock);
@@ -314,6 +328,9 @@ esp_err_t wifi_mgr_set_credentials(const char *ssid, const char *password)
         return err;
     }
     ESP_LOGI(TAG, "new Wi-Fi credentials stored for SSID \"%s\"", ssid);
+    if (!s_started) {
+        return ESP_OK; /* used on the next Wi-Fi start */
+    }
 
     xSemaphoreTake(s_lock, portMAX_DELAY);
     s_st.sta_configured = true;
@@ -343,6 +360,10 @@ esp_err_t wifi_mgr_clear_credentials(void)
 
 void wifi_mgr_print_ap_credentials(void)
 {
+    if (!s_started) {
+        printf("Wi-Fi is not running (safe mode). Start it with 'wifi_start'.\n");
+        return;
+    }
     /* printf on purpose: goes to UART only, never into the web log buffer. */
     printf("\n"
            "*****************************************************\n"

@@ -8,7 +8,7 @@
 Open-Source-Firmware (ESP-IDF, C), die einen Brother TD-2020A Etikettendrucker per USB an einen
 ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
 
-> **Aktueller Stand: Phase 2 – USB-Diagnose-Firmware (v0.2.0-diag).**
+> **Aktueller Stand: Phase 2 – USB-Diagnose-Firmware (v0.2.1-diag).**
 > Diese Version **druckt noch nicht**. Sie erkennt den Drucker, liest alle USB-Deskriptoren
 > aus und zeigt sie auf der seriellen Konsole und im Webinterface an. Sie ist bisher **nur
 > kompiliert und auf dem PC getestet, nicht auf echter Hardware.** Mit Ihren Messwerten wird
@@ -185,6 +185,23 @@ Setup-WLAN heraus ändern, nicht aus dem Heimnetz.
 Falls gar nichts erkannt wird: Ohne VBUS gibt es keine einzige USB-Logzeile. Mit VBUS, aber
 fehlerhafter Enumeration, erscheinen `ENUM`-Fehlermeldungen der ESP-IDF – bitte mitschicken.
 
+## Fehlerbehebung
+
+### Neustart-Schleife mit `E BOD: Brownout detector was triggered`
+
+Die Versorgungsspannung bricht ein, sobald das WLAN startet (Funkkalibrierung, Stromspitzen von
+mehreren hundert mA). Ursache ist praktisch immer die Stromversorgung:
+
+- anderes, **kurzes USB-Kabel** verwenden (dünne/lange Kabel haben zu viel Widerstand)
+- anderen USB-Port am PC (Rückseite) oder einen **aktiven USB-Hub** bzw. ein 5-V-Netzteil (≥ 1 A)
+- OTG-Adapter und Drucker **abziehen**, solange das Problem besteht
+- falls eine Lötbrücke „USB-OTG“ geschlossen ist: prüfen, ob am nativen Port etwas Strom zieht
+- notfalls einen Elko (z. B. 470–1000 µF) zwischen 5 V und GND des Boards
+
+Ab Firmware 0.2.1 startet das Board nach zwei Brownouts in Folge im **Sicherheitsmodus** ohne
+WLAN. Die USB-Diagnose über die serielle Konsole (`usb`, `usb_refresh`, `usb_read`) funktioniert
+dann trotzdem; `wifi_start` versucht das WLAN erneut.
+
 ## Serielle Konsole
 
 | Befehl | Funktion |
@@ -194,6 +211,7 @@ fehlerhafter Enumeration, erscheinen `ENUM`-Fehlermeldungen der ESP-IDF – bitt
 | `usb_read` | einmal vom Bulk-IN-Endpoint lesen (1 s), Hexdump |
 | `status` | Drucker, WLAN, Speicher |
 | `wifi_set <ssid> [passwort]` | WLAN speichern und verbinden |
+| `wifi_start` | WLAN und Webserver starten (nach Sicherheitsmodus) |
 | `wifi_clear` | WLAN-Daten löschen, Neustart in den Setup-Modus |
 | `ap_info` | Setup-WLAN und Passwort anzeigen |
 | `log` | gepufferten Log ausgeben |

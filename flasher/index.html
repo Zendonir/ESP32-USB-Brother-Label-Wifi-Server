@@ -99,6 +99,14 @@
   </div>
 
   <div class="card">
+    <h2>Neustart-Schleife „Brownout detector was triggered“?</h2>
+    <p>Die Stromversorgung reicht für den WLAN-Start nicht aus. Bitte ein kurzes, gutes USB-Kabel, einen
+      anderen USB-Port (oder aktiven Hub / 5-V-Netzteil ≥ 1 A) verwenden und OTG-Adapter sowie Drucker vorerst
+      abziehen. Nach zwei Brownouts in Folge startet die Firmware ohne WLAN; die USB-Diagnose funktioniert
+      dann in der Konsole weiterhin (<code>usb</code>), <code>wifi_start</code> versucht das WLAN erneut.</p>
+  </div>
+
+  <div class="card">
     <h2>Alternativ: manuell flashen</h2>
     <p>Alle Dateien (inkl. Merged-Image und Prüfsummen) gibt es bei den
       <a id="releases" href="#">GitHub-Releases</a>. Mit esptool:</p>
