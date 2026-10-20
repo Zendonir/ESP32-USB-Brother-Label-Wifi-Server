@@ -10,8 +10,9 @@ Alle Hardware-Tests im [Testplan](testplan.md) sind offen.
 
 - **Kein Druck über Port 9100, keine REST-Druck-API, keine Warteschlange.** Folgt in Phase 4/5.
 - Es werden **keine Brother-Befehle** gesendet (keine Statusabfrage `ESC i S`, keine
-  Initialisierung, keine Templates), weil die Brother-Referenz für den TD-2020A nicht
-  verifiziert werden konnte (siehe [phase1-analyse.md](phase1-analyse.md#4-drucker-brother-td-2020a)).
+  Initialisierung, keine Templates). Die Befehle sind inzwischen dokumentiert (siehe
+  [phase1-analyse.md](phase1-analyse.md#4-drucker-brother-td-2020a)), werden aber erst in
+  Phase 3 eingebaut, wenn die USB-Verbindung am Gerät bestätigt ist.
 - `usb_printer_write()` (Bulk OUT mit Timeout/Recovery) ist implementiert, aber nur über die
   optionale Entwicklungsfunktion `/api/diag/raw` erreichbar (standardmäßig **aus**).
 - Ein herstellerspezifisches Interface (Klasse 0xFF) wird nur angezeigt, nicht belegt,

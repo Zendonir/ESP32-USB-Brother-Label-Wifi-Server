@@ -8,11 +8,11 @@ Stand: 20.10.2026. Dieses Dokument trennt strikt zwischen **verifiziert**, **aus
 | Thema | Status |
 |---|---|
 | ESP-IDF USB-Host-Library (ESP32-S3, Full Speed, Bulk/Control) | verifiziert (API gegen ESP-IDF v5.5.6 kompiliert) |
-| Brother USB-Vendor-ID 0x04F9 | aus öffentlicher `usb.ids`-Datenbank; TD-2020A dort **nicht** gelistet |
-| Product-ID des TD-2020A | **unbekannt** – wird von der Diagnose-Firmware ausgelesen |
-| USB Printer Class (0x07) am TD-2020A | **unbekannt** – wird von der Diagnose-Firmware ausgewertet |
-| Bulk-IN / Statuskanal | **unbekannt** |
-| Brother-Raster-/Template-Befehle für TD-2020A | **nicht verifiziert** (Dokumente aus dieser Umgebung nicht abrufbar, s. 4.) |
+| Brother USB-Vendor-ID 0x04F9 | laut Brother Raster Command Reference (Anhang A) |
+| Product-ID des TD-2020A | **nicht dokumentiert** (TD-2020 = 0x2055); wird von der Diagnose-Firmware ausgelesen |
+| USB Printer Class, Bulk IN/OUT | laut Raster-Referenz für die TD-2000-Serie ja; für TD-2020A am Gerät zu bestätigen |
+| Brother-Raster-Befehle | dokumentiert (Raster Command Reference 1.01, s. 4.); TD-2020A dort nicht namentlich genannt |
+| P-touch-Template-Befehle | dokumentiert, **TD-2020A ausdrücklich genannt** (P-touch Template 2.0 Reference 3.08) |
 | VBUS-Versorgung am Heemol-Board | **unbekannt** – muss am Board gemessen werden (s. 3.) |
 | Windows-RAW-Druck (Port 9100) | konzeptionell ohne Brother-Befehle möglich (Treiber erzeugt Daten) |
 
@@ -67,40 +67,72 @@ Messung, die vor dem Anschluss des Druckers nötig ist: siehe [usb-verkabelung.m
 
 ## 4. Drucker: Brother TD-2020A
 
-### Was öffentlich bekannt ist
+### Quellen
 
-- Brother bietet für die TD-2000-Serie eine *Raster Command Reference*
-  (`cv_td2000_eng_raster_101.pdf`, Modelle TD-2020/2120N/2130N und TD-2030A/2125N/…)
-  mit einem Anhang „USB Specifications“ sowie eine P-touch-Template-Referenz an.
-- Ein Händlereintrag nennt für den TD-2020A zusätzlich eine ZPL-II-Emulation.
-  Ob das auf Ihre Variante zutrifft und wie umgeschaltet wird, ist unklar.
+Beide Dokumente gibt es im **Brother Developer Center**
+(<https://support.brother.com/g/s/es/dev/en/index.html?navi=offall>) bzw. auf der Brother-Support-
+Seite des Modells unter *Handbücher → Software Developer's Manual*:
 
-### Was hier **nicht** verifiziert werden konnte
+| Dokument | Datei | Abgedeckte Modelle |
+|---|---|---|
+| Raster Command Reference, Version 1.01 (2013) | `cv_td2000_eng_raster_101.pdf` | TD-2020/2120N/2130N, TD-2030A/2125N/2125NWB/2135N/2135NWB – **TD-2020A nicht genannt** |
+| P-touch Template 2.0 Command Reference, Version 3.08 (2025) | `cv_rj_td_eng_ptemp_308.pdf` | u. a. TD-2020/2120N/2130N und **TD-2020A**/2030A/2125N/… |
 
-Die Brother-Server (`download.brother.com`) und Archivkopien waren aus der Build-Umgebung
-gesperrt (HTTP 403). Deshalb wurden **keine** Brother-Befehle implementiert – weder
-Statusabfrage noch Initialisierung, Raster- oder Template-Befehle. Für Phase 3 (Testetikett)
-und Phase 5 (Template-API) wird eines davon benötigt:
+Laut Nutzungsbedingungen dürfen die PDFs **nicht weitergegeben** werden. Sie gehören daher nicht
+ins Repository; lokal können sie unter `docs/vendor/` liegen (per `.gitignore` ausgeschlossen).
+Im Folgenden werden nur Fakten genannt, die für die Implementierung nötig sind.
 
-1. das PDF der Raster Command Reference bzw. P-touch-Template-Referenz für den TD-2020A
-   (bitte ins Repository unter `docs/vendor/` legen oder den Inhalt bereitstellen), **oder**
-2. eine mit dem originalen Windows-Treiber erzeugte Druckdatei („Ausgabe in Datei“), die
-   unverändert gesendet wird.
+### USB laut Raster-Referenz, Anhang A (TD-2000-Serie)
 
-Für den Windows-Weg (RAW, Port 9100) sind **keine** Brother-Befehle in der Firmware nötig:
-Der Treiber erzeugt die Daten, der ESP32 reicht sie durch.
+| Merkmal | Wert |
+|---|---|
+| USB | 1.1, Full Speed |
+| Vendor-ID | 0x04F9 |
+| Product-ID | TD-2020 0x2055, TD-2120N 0x2057, TD-2130N 0x2058, TD-2030A 0x20F6, TD-2125N 0x20F7, TD-2125NWB 0x20F8, TD-2135N 0x20F9, TD-2135NWB 0x20FA – **TD-2020A fehlt** |
+| Klasse | Printer **oder** Mass Storage (Speichermodus) |
+| Interfaces | 1, keine Alternate Settings |
+| Versorgung | self-powered |
+| Endpoint 1 | Bulk IN, 64 Byte (Status vom Drucker) |
+| Endpoint 2 | Bulk OUT, 64 Byte (Befehle und Druckdaten) |
+| Strings | Hersteller „Brother“ (Index 1), Seriennummer (Index 3) |
 
-### USB-Printer-Class-Standardanfragen (keine Brother-Befehle)
+Die Diagnose-Firmware passt dazu ohne Änderung: Sie wählt die Printer-Class-Schnittstelle mit
+Bulk OUT, nutzt Bulk IN für Status und markiert einen Massenspeicher-Modus.
 
-Die Diagnose nutzt nur Anfragen aus der USB Printer Class Spezifikation 1.1:
+**TD-2020A:** In der Template-Referenz hat er denselben Modellcode wie der TD-2020 („3“, 33h)
+und steht in derselben Gerätegruppe. Daher ist zu **vermuten**, aber nicht belegt, dass er sich
+per USB wie der TD-2020 verhält (eventuell auch PID 0x2055). Das klärt der erste
+Diagnosebericht.
 
-| Anfrage | bmRequestType | bRequest | wValue | wIndex | Zweck |
-|---|---|---|---|---|---|
-| GET_DEVICE_ID | 0xA1 | 0x00 | Konfig-Index (0) | Interface << 8 \| AltSetting | IEEE-1284-ID (MFG/MDL/CMD …) |
-| GET_PORT_STATUS | 0xA1 | 0x01 | 0 | Interface | Paper Empty / Select / Not Error |
+Unterstützte Druckersprachen des TD-2020A laut Template-Referenz (Anhang B): Raster, ESC/P,
+P-touch Template, ZPL-II-Emulation, CPCL-Emulation; 203 dpi; USB und RS-232C.
 
-Die IEEE-1284-ID (Feld `CMD:`) zeigt, welche Befehlssprachen der Drucker selbst meldet –
-genau die Information, die für Phase 3 fehlt.
+### Für die nächsten Phasen relevante Befehle (Raster-Referenz, Kap. 3–5)
+
+| Befehl | Bytes | Verwendung |
+|---|---|---|
+| Invalidate | `00` (200×) | bricht einen unvollständigen Auftrag ab, gefolgt von Initialize |
+| Initialize | `1B 40` | Moduseinstellungen zurücksetzen, Druck abbrechen |
+| Status information request | `1B 69 53` | Antwort **immer 32 Byte** über Bulk IN |
+
+Statusantwort (32 Byte): Byte 0 = 80h, Byte 1 = 20h (Größe), Byte 2 = „B“, Byte 3 = Serien-
+code „5“, Byte 4 = Modellcode (TD-2020: „3“), Byte 8 = Fehlerinfo 1 (Bit 0 kein Medium, Bit 1
+Medienende, Bit 4 Drucker belegt), Byte 9 = Fehlerinfo 2 (Bit 0 falsches Medium, Bit 2
+Kommunikationsfehler, Bit 4 Deckel offen, Bit 6 Medium lässt sich nicht transportieren, Bit 7
+Systemfehler), Byte 10/17 = Medienbreite/-länge in mm, Byte 11 = Medientyp (00h keins,
+4Ah Endlos, 4Bh Etiketten), Byte 18 = Statustyp, Byte 19–21 = Phase, Byte 22 = Meldung.
+
+Wichtige Regeln aus der Referenz:
+
+- Statusabfrage **einmal vor** dem Senden von Druckdaten; **nicht während** des Drucks – der
+  Drucker meldet Fehler und Druckende dann **selbst** über Bulk IN.
+- Nach Druckdaten darf bis zur Druckende-Meldung kein Befehl gesendet werden.
+- Über USB beginnt der Drucker bei unkomprimierten Rasterdaten schon während des Empfangs
+  (*concurrent printing*); Fehlerabläufe beschreiben die Flussdiagramme in Kap. 5.
+
+Folgen für die Firmware: Das Ende eines Druckauftrags lässt sich über die Statusmeldungen auf
+Bulk IN feststellen. Damit kann eine Warteschlange zwischen „übertragen“ und „vom Drucker als
+gedruckt gemeldet“ unterscheiden. Das gilt erst, wenn es am Gerät bestätigt ist.
 
 ## 5. Bewertung von MAXXTANG/ESP32S3_PrintServer
 
@@ -133,6 +165,8 @@ Raster-Befehlsreferenz voraus (s. 4.); PDF-Rendering ist auf dem ESP32-S3 nicht 
 ## 7. Am echten Gerät zu ermitteln (Phase 2 liefert das automatisch)
 
 1. Spannung an VBUS des OTG-Adapters (Messung, s. Verkabelung)
+   – Erwartung laut Referenz bei 3.–8.: PID ähnlich TD-2020 (0x2055), 1 Printer-Interface,
+   Bulk IN 0x81 / Bulk OUT 0x02 (je 64 Byte), self-powered
 2. Wird der Drucker überhaupt enumeriert? (Log-Zeile `device attached`)
 3. VID/PID, bcdDevice, Hersteller-/Produkt-String
 4. Interfaces: Klasse, Protokoll, Alternate Settings, Endpoints (Bulk OUT/IN, MPS)

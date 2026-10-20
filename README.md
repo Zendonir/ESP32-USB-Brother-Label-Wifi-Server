@@ -153,7 +153,6 @@ Setup-WLAN heraus ändern, nicht aus dem Heimnetz.
    - Ausgabe von `usb_refresh` **mit** und **ohne** Etikettenrolle / mit offenem Deckel
    - Ausgabe von `usb_read`
    - VBUS-Messwert, Fotos der Board-Ober- und Unterseite
-   - falls vorhanden: Brother „Raster Command Reference“ / „P-touch Template“-PDF für den TD-2020A
 5. Optional für Phase 3: eine mit dem **originalen Windows-Treiber** erzeugte Druckdatei
    (`.prn`, siehe [Testplan](docs/testplan.md#optionaler-vorab-test-für-phase-3-nur-mit-config_diag_enable_raw_sendy)).
 
