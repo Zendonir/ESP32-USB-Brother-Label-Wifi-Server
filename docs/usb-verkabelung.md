@@ -30,6 +30,9 @@ zwischen USB-5-V und dem 5-V-Pin (Pin dann auch als Ausgang nutzbar, aber ohne R
 Für diesen Aufbau wird sie **nicht** benötigt; die genaue Beschaltung ist für diese Revision nicht
 belegt.
 
+Im Auslieferungszustand sind **beide Brücken offen** (vom Nutzer bestätigt). Die „USB“-Buchse liefert
+dann kein VBUS; für den Drucker muss die Brücke **„USB-OTG“** geschlossen werden, „IN-OUT“ bleibt offen.
+
 Bei anderen Boards:
 
 1. Board ohne Drucker per USB an den PC.
