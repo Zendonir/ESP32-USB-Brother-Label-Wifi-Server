@@ -23,7 +23,8 @@ Wert unbekannt.
 
 **Heemol ESP32-S3 N16R8:** Die Buchsen sind mit **„COM“** und **„USB“** beschriftet (vom Nutzer
 bestätigt). „COM“ = USB-UART-Wandler (Strom, Flashen, Konsole), „USB“ = nativer USB-Port
-(GPIO19/20) für OTG-Adapter und Drucker.
+(GPIO19/20) für OTG-Adapter und Drucker. Das Board hat eine Lötbrücke **„USB-OTG“**
+(vom Nutzer bestätigt), die 5 V auf VBUS der „USB“-Buchse legt – siehe „Ohne VBUS – Optionen“, Punkt 1.
 
 Bei anderen Boards:
 
