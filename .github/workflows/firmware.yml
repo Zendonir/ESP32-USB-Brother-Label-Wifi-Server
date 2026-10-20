@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Create a GitHub release with this tag (e.g. v0.2.0-diag); empty = build only"
+        required: false
+        default: ""
 
 concurrency:
   group: firmware-${{ github.ref }}
@@ -40,8 +45,16 @@ jobs:
       - name: Determine version
         id: ver
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ -n "$RELEASE_TAG" ]]; then
+            if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.+-]*$ ]]; then
+              echo "::error::release_tag must look like v1.2.3 or v1.2.3-suffix"
+              exit 1
+            fi
+            v="${RELEASE_TAG#v}"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             v="${GITHUB_REF_NAME#v}"
           else
             v="0.2.0-diag-${GITHUB_SHA::7}"
@@ -82,7 +95,7 @@ jobs:
     name: Publish web flasher (GitHub Pages)
     needs: [host-tests, build]
     # The github-pages environment only accepts deployments from the default branch.
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -114,7 +127,7 @@ jobs:
   release:
     name: GitHub release
     needs: [host-tests, build]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -127,7 +140,9 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ contains(inputs.release_tag || github.ref_name, '-') }}
           generate_release_notes: true
           body: |
             ESP32-S3 (N16R8) firmware, built with ESP-IDF ${{ env.IDF_RELEASE_VERSION }}.

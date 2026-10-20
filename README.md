@@ -116,8 +116,13 @@ Dialog sehen Sie die serielle Ausgabe (Setup-Passwort, USB-Bericht) direkt im Br
 ### Fertige Dateien
 
 GitHub Actions baut die Firmware bei jedem Push (ESP-IDF 5.5.6 und zur Kontrolle 6.1). Die Dateien
-liegen als Artefakt am jeweiligen Lauf unter *Actions*. Für ein Git-Tag `v*` (z. B. `v0.2.0-diag`)
-entsteht automatisch ein **GitHub-Release** mit allen Images, `manifest.json` und `SHA256SUMS`.
+liegen als Artefakt am jeweiligen Lauf unter *Actions*. Fertige Versionen stehen unter
+[**Releases**](https://github.com/Zendonir/ESP32-USB-Brother-Label-Wifi-Server/releases) (alle Images,
+`manifest.json`, `SHA256SUMS`).
+
+Neues Release erstellen: *Actions → Firmware → Run workflow*, bei `release_tag` z. B. `v0.3.0`
+eintragen. Alternativ erzeugt auch ein gepushtes Git-Tag `v*` ein Release. Versionen mit
+Bindestrich (z. B. `v0.2.0-diag`) werden als Vorabversion markiert.
 
 ### Mit ESP-IDF
 
