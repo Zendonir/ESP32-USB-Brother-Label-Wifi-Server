@@ -21,6 +21,12 @@ Wert unbekannt.
 
 ## Schritt 1 – Ports identifizieren
 
+**Heemol ESP32-S3 N16R8:** Die Buchsen sind mit **„COM“** und **„USB“** beschriftet (vom Nutzer
+bestätigt). „COM“ = USB-UART-Wandler (Strom, Flashen, Konsole), „USB“ = nativer USB-Port
+(GPIO19/20) für OTG-Adapter und Drucker.
+
+Bei anderen Boards:
+
 1. Board ohne Drucker per USB an den PC.
 2. Port, an dem ein Wandler (CH340/CH343/CP210x) erscheint = **UART/COM** → Stromversorgung,
    Flashen, Konsole.
