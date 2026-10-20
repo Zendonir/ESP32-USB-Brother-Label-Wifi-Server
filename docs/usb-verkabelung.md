@@ -25,6 +25,10 @@ Wert unbekannt.
 bestätigt). „COM“ = USB-UART-Wandler (Strom, Flashen, Konsole), „USB“ = nativer USB-Port
 (GPIO19/20) für OTG-Adapter und Drucker. Das Board hat eine Lötbrücke **„USB-OTG“**
 (vom Nutzer bestätigt), die 5 V auf VBUS der „USB“-Buchse legt – siehe „Ohne VBUS – Optionen“, Punkt 1.
+Außerdem gibt es eine Brücke **„IN-OUT“**. Bei vergleichbaren Boards überbrückt sie die Diode
+zwischen USB-5-V und dem 5-V-Pin (Pin dann auch als Ausgang nutzbar, aber ohne Rückstromschutz).
+Für diesen Aufbau wird sie **nicht** benötigt; die genaue Beschaltung ist für diese Revision nicht
+belegt.
 
 Bei anderen Boards:
 
