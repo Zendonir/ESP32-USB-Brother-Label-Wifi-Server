@@ -58,9 +58,22 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 | P3-4 | Testdruck | `.prn` des Originaltreibers erzeugen, Datei im Reiter System senden | Etikett wird gedruckt; Antwort `result: printed` | ✅ 4454 Byte (Treiberdatei), Drucker meldet Druck → abgeschlossen → empfangsbereit (21.10.2026) |
 | P3-5 | Testdruck mit offenem Deckel | wie P3-4 bei offenem Deckel | `result: printer_error`, kein Hängen; danach druckt P3-4 wieder | ✅ `printer_error`, `cover_open` (error2 = 10h) (21.10.2026) |
 | P3-5b | Testdruck ohne Papier | wie P3-4 ohne Band | `printer_error` | ✅ `end_of_media` (error1 = 02h) – meldet der TD-2020A auch bei Endlosband (21.10.2026) |
-| P3-5c | Verhalten nach Fehler | Deckel schließen bzw. Band einlegen, ohne erneut zu senden | klären: druckt der Drucker den abgebrochenen Auftrag nach? | ⏳ |
+| P3-5c | Verhalten nach Fehler | Deckel schließen bzw. Band einlegen, ohne erneut zu senden | klären: druckt der Drucker den abgebrochenen Auftrag nach? | ✅ Nein – der Drucker **verwirft** den Auftrag (21.10.2026). Folge: Auftrag = fehlgeschlagen, Wiederholung nur auf Wunsch |
 | P3-6 | Abbruch | während des Uploads Browser/WLAN trennen | Log `raw send INCOMPLETE … aborting job`, Drucker druckt nichts Halbes bzw. bricht ab | ⏳ |
 | P3-7 | Abschalten | `raw_send off`, Upload versuchen | `403`; nach Neustart wieder möglich | ⏳ |
+
+## P4. Phase 4 – Windows über Port 9100 + Warteschlange (Firmware ≥ 0.4.0)
+
+| ID | Test (Prompt-Punkt) | Durchführung | Erwartet | Status |
+|---|---|---|---|---|
+| P4-1 | Windows-Druck (4) | Einrichtung nach docs/windows-einrichtung.md, Testseite/Etikett drucken | Etikett; Auftrag `gedruckt` | ⏳ |
+| P4-2 | HTTP-Druck (5) | `curl --data-binary @test.prn http://<ip>/api/print/raw` | 202 + Job-ID, danach `gedruckt` | ⏳ |
+| P4-3 | Gleichzeitig (6) | Windows-Druck + HTTP-Druck direkt nacheinander | zwei saubere Etiketten, FIFO, nichts vermischt | ⏳ |
+| P4-4 | Deckel offen vor dem Druck (9) | Deckel öffnen, drucken, nach 30 s schließen | Auftrag `wartet auf Drucker`, druckt nach dem Schließen | ⏳ |
+| P4-5 | Fehler während des Drucks | Papier zu Ende während des Drucks | `fehlgeschlagen`, kein Nachdruck; „Wiederholen“ druckt erneut | ⏳ |
+| P4-6 | WLAN-Abbruch (7) | während großer Übertragung WLAN des PCs trennen | `unvollständig`, nichts gedruckt | ⏳ |
+| P4-7 | Mehrere Aufträge | 5 Etiketten schnell hintereinander aus Windows | 5 Aufträge nacheinander `gedruckt` | ⏳ |
+| P4-8 | Zugriffsschutz | `raw_allow 10.0.0.0/8`, aus dem Heimnetz drucken | Verbindung abgewiesen (Log), `raw_allow any` hebt auf | ⏳ |
 
 ## D. Spätere Phasen (Gesamtplan)
 

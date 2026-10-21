@@ -21,6 +21,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mdns.h"
+#include "print_queue.h"
+#include "raw_tcp_server.h"
 #include "sdkconfig.h"
 #include "usb_printer.h"
 #include "web_server.h"
@@ -53,6 +55,13 @@ static void start_mdns(const char *hostname)
     mdns_hostname_set(hostname);
     mdns_instance_name_set("Brother TD-2020A Print Server");
     mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    mdns_txt_item_t txt[] = {
+        { "ty", "Brother TD-2020" },
+        { "product", "(TD-2020)" },
+        { "usb_MFG", "Brother" },
+        { "usb_MDL", "TD-2020" },
+    };
+    mdns_service_add(NULL, "_pdl-datastream", "_tcp", CONFIG_RAW_TCP_PORT, txt, sizeof(txt) / sizeof(txt[0]));
     ESP_LOGI(TAG, "mDNS: http://%s.local/", hostname);
 }
 
@@ -71,6 +80,10 @@ esp_err_t app_start_network(void)
     err = web_server_start();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "web server start failed: %s", esp_err_to_name(err));
+    }
+    err = raw_tcp_server_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "RAW print server start failed: %s", esp_err_to_name(err));
     }
     return ESP_OK;
 }
@@ -121,7 +134,7 @@ void app_main(void)
     diag_log_init(CONFIG_APP_LOG_BUFFER_SIZE);
 
     const esp_app_desc_t *app = esp_app_get_description();
-    ESP_LOGI(TAG, "%s %s (ESP-IDF %s) - phase 3: USB transport, Brother status, test print", app->project_name, app->version,
+    ESP_LOGI(TAG, "%s %s (ESP-IDF %s) - phase 4: RAW port 9100 + print queue", app->project_name, app->version,
              app->idf_ver);
 
     ESP_ERROR_CHECK(cfg_init());
@@ -137,6 +150,7 @@ void app_main(void)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "USB host start failed: %s", esp_err_to_name(err));
     }
+    ESP_ERROR_CHECK(print_queue_start());
 
     if (cfg_get_str(CFG_NS_SYSTEM, "hostname", s_hostname, sizeof(s_hostname)) != ESP_OK || !s_hostname[0]) {
         strlcpy(s_hostname, CONFIG_APP_DEFAULT_HOSTNAME, sizeof(s_hostname));

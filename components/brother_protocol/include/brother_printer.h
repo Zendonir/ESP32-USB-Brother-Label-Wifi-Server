@@ -29,13 +29,13 @@ esp_err_t brother_query_status(brother_status_t *out);
 
 /*
  * Reads status messages the printer sends on its own (phase changes,
- * "printing completed", errors) for up to `total_ms`. Stops early on
- * "printing completed" followed by "waiting to receive", on an error status,
- * or after `idle_ms` without any message once at least one was received.
+ * "printing completed", errors) for up to `total_ms`. Stops early on an error,
+ * 3 s after "printing completed" + "waiting to receive" if no further page
+ * starts, or after `idle_ms` without any message once one was received.
  * The caller must hold usb_printer_job_begin().
  */
 typedef struct {
-    brother_status_t items[8];
+    brother_status_t items[16];
     size_t count;
     bool printing_completed;    /* status type 01h received */
     bool error;                 /* status type 02h received or error bits set */

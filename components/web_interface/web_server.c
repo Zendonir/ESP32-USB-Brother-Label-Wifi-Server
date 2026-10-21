@@ -1,12 +1,15 @@
 #include "web_server.h"
 
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 
 #include "brother_printer.h"
 #include "diag_log.h"
+#include "print_queue.h"
+#include "raw_tcp_server.h"
 #include "esp_app_desc.h"
 #include "esp_heap_caps.h"
 #include "esp_http_server.h"
@@ -15,6 +18,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "lwip/inet.h"
 #include "lwip/sockets.h"
 #include "sdkconfig.h"
 #include "strbuf.h"
@@ -237,7 +241,7 @@ static esp_err_t h_status(httpd_req_t *req)
     sb_json_str(&sb, app->version);
     sb_puts(&sb, ",\"idf\":");
     sb_json_str(&sb, app->idf_ver);
-    sb_printf(&sb, ",\"build\":\"%s %s\",\"phase\":\"3-status-testprint\"},", app->date, app->time);
+    sb_printf(&sb, ",\"build\":\"%s %s\",\"phase\":\"4-raw9100-queue\"},", app->date, app->time);
 
     sb_printf(&sb, "\"uptime_s\":%lld,\"reset_reason\":\"%s\",", esp_timer_get_time() / 1000000,
               reset_reason_name(esp_reset_reason()));
@@ -276,6 +280,18 @@ static esp_err_t h_status(httpd_req_t *req)
     sb_json_str(&sb, p.last_error);
     sb_puts(&sb, "},");
 
+    print_queue_stats_t qs;
+    print_queue_get_stats(&qs);
+    char allow[24];
+    raw_tcp_server_get_allowed(allow, sizeof(allow));
+    sb_printf(&sb, "\"queue\":{\"queued\":%lu,\"active_id\":%lu,\"total_printed\":%lu,\"total_failed\":%lu,"
+              "\"spool_bytes\":%u,\"raw_port\":%d,\"raw_connections\":%lu,\"raw_allowed\":",
+              (unsigned long)qs.queued, (unsigned long)qs.active_id, (unsigned long)qs.total_printed,
+              (unsigned long)qs.total_failed, (unsigned)qs.spool_bytes, CONFIG_RAW_TCP_PORT,
+              (unsigned long)raw_tcp_server_connections());
+    sb_json_str(&sb, allow);
+    sb_puts(&sb, "},");
+
     brother_status_t bst;
     int64_t age_ms = 0;
     sb_puts(&sb, "\"brother\":");
@@ -288,7 +304,7 @@ static esp_err_t h_status(httpd_req_t *req)
 
 #if CONFIG_DIAG_ENABLE_RAW_SEND
     sb_printf(&sb, "\"features\":{\"raw_send\":%s,\"raw_send_available\":true,\"raw_send_max_bytes\":%d}}",
-              s_raw_send_enabled ? "true" : "false", CONFIG_DIAG_RAW_SEND_MAX_BYTES);
+              s_raw_send_enabled ? "true" : "false", CONFIG_PRINT_QUEUE_MAX_JOB_BYTES);
 #else
     sb_puts(&sb, "\"features\":{\"raw_send\":false,\"raw_send_available\":false}}");
 #endif
@@ -409,53 +425,12 @@ static esp_err_t h_restart(httpd_req_t *req)
     return ESP_OK;
 }
 
-#if CONFIG_DIAG_ENABLE_RAW_SEND
-/* Discards the rest of a request body so the connection stays usable for the response. */
-static void drain_body(httpd_req_t *req, size_t remaining, uint8_t *buf, size_t size)
+/* Receives the request body into a spool. Returns NULL on success, else a reason. */
+static const char *receive_job(httpd_req_t *req, print_spool_t *sp, bool *connection_lost)
 {
-    while (remaining > 0) {
-        int r = httpd_req_recv(req, (char *)buf, remaining < size ? remaining : size);
-        if (r == HTTPD_SOCK_ERR_TIMEOUT) {
-            continue;
-        }
-        if (r <= 0) {
-            return;
-        }
-        remaining -= (size_t)r;
-    }
-}
-
-/*
- * Forwards the request body unchanged to the printer's bulk OUT endpoint, then
- * reports what the printer itself answers on bulk IN (phase change, "printing
- * completed", errors). Development aid for phase 3: a .prn file produced by the
- * ORIGINAL Brother driver ("print to file"). Holds the job lock for the whole
- * transfer, so status requests cannot interleave. An incomplete job is aborted
- * with invalidate + initialize as the Raster Command Reference describes.
- */
-static esp_err_t h_diag_raw(httpd_req_t *req)
-{
-    if (!s_raw_send_enabled) {
-        return send_json_msg(req, "403 Forbidden", false,
-                             "raw send was disabled on the serial console ('raw_send on' enables it again)");
-    }
-    if (req->content_len == 0 || req->content_len > CONFIG_DIAG_RAW_SEND_MAX_BYTES) {
-        return send_json_msg(req, "413 Payload Too Large", false, "empty body or larger than DIAG_RAW_SEND_MAX_BYTES");
-    }
-    usb_printer_summary_t p;
-    usb_printer_get_summary(&p);
-    if (!p.ready) {
-        return send_json_msg(req, "409 Conflict", false, "printer not ready");
-    }
-    if (usb_printer_job_begin(0) != ESP_OK) {
-        return send_json_msg(req, "409 Conflict", false, "printer busy with another job");
-    }
-    ESP_LOGI(TAG, "raw send: %u bytes", (unsigned)req->content_len);
     static uint8_t chunk[4096];
     size_t received = 0;
-    size_t acked = 0;
-    esp_err_t usb_err = ESP_OK;
-    bool net_err = false;
+    *connection_lost = false;
     while (received < req->content_len) {
         size_t want = req->content_len - received;
         int r = httpd_req_recv(req, (char *)chunk, want < sizeof(chunk) ? want : sizeof(chunk));
@@ -463,63 +438,154 @@ static esp_err_t h_diag_raw(httpd_req_t *req)
             continue;
         }
         if (r <= 0) {
-            net_err = true;
-            break;
+            *connection_lost = true;
+            return "connection lost during upload";
         }
         received += (size_t)r;
-        size_t w = 0;
-        usb_err = usb_printer_write(chunk, (size_t)r, CONFIG_DIAG_RAW_SEND_TIMEOUT_MS, &w);
-        acked += w;
-        if (usb_err != ESP_OK) {
-            break;
+        if (print_spool_append(sp, chunk, (size_t)r) != ESP_OK) {
+            return "out of memory while receiving";
         }
     }
-    bool complete = !net_err && usb_err == ESP_OK && acked == req->content_len;
+    return NULL;
+}
 
-    brother_status_log_t log;
-    memset(&log, 0, sizeof(log));
-    if (complete) {
-        /* The printer reports phase changes and "printing completed" by itself. */
-        brother_collect_statuses(30000, 10000, &log);
-    } else {
-        ESP_LOGE(TAG, "raw send INCOMPLETE (%u of %u bytes, %s) - aborting job on the printer",
-                 (unsigned)acked, (unsigned)req->content_len, net_err ? "connection lost" : esp_err_to_name(usb_err));
-        brother_cancel_job();
-    }
-    usb_printer_job_end();
-
-    if (net_err) {
+/* Common part of POST /api/print/raw and /api/diag/raw: spool and queue the body. */
+static esp_err_t submit_from_request(httpd_req_t *req, uint32_t *id)
+{
+    if (req->content_len == 0 || req->content_len > CONFIG_PRINT_QUEUE_MAX_JOB_BYTES) {
+        send_json_msg(req, "413 Payload Too Large", false, "empty body or larger than the maximum job size");
         return ESP_FAIL;
     }
-    drain_body(req, req->content_len - received, chunk, sizeof(chunk));
+    char client[16] = "";
+    int fd = httpd_req_to_sockfd(req);
+    struct sockaddr_storage addr;
+    socklen_t alen = sizeof(addr);
+    if (getpeername(fd, (struct sockaddr *)&addr, &alen) == 0) {
+        if (addr.ss_family == AF_INET) {
+            inet_ntoa_r(((struct sockaddr_in *)&addr)->sin_addr, client, sizeof(client));
+        }
+#if CONFIG_LWIP_IPV6
+        else if (addr.ss_family == AF_INET6) {
+            const uint8_t *b = (const uint8_t *)&((struct sockaddr_in6 *)&addr)->sin6_addr;
+            snprintf(client, sizeof(client), "%u.%u.%u.%u", b[12], b[13], b[14], b[15]);
+        }
+#endif
+    }
+    print_spool_t sp = { 0 };
+    bool lost = false;
+    const char *fail = receive_job(req, &sp, &lost);
+    if (fail) {
+        size_t n = sp.len;
+        print_spool_free(&sp);
+        print_queue_record_incomplete(JOB_SRC_HTTP, client, n, fail);
+        if (!lost) {
+            send_json_msg(req, "507 Insufficient Storage", false, fail);
+        }
+        return ESP_FAIL;
+    }
+    if (print_queue_submit(&sp, JOB_SRC_HTTP, client, id) != ESP_OK) {
+        send_json_msg(req, "503 Service Unavailable", false, "print queue full");
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
 
+static esp_err_t send_job(httpd_req_t *req, const char *status, uint32_t id)
+{
+    print_job_info_t j;
+    if (print_queue_get(id, &j) != ESP_OK) {
+        return send_json_msg(req, "404 Not Found", false, "job not found");
+    }
     strbuf_t sb;
     sb_init(&sb, s_resp, RESP_BUF_SIZE);
-    const char *result = !complete ? "transfer_failed"
-                         : log.error ? "printer_error"
-                         : log.printing_completed ? "printed"
-                         : "sent_no_confirmation";
-    sb_printf(&sb, "{\"ok\":%s,\"result\":\"%s\",\"bytes_expected\":%u,\"bytes_received\":%u,"
-              "\"bytes_acknowledged_by_usb\":%u,\"usb_result\":\"%s\",\"printer_reported_completed\":%s,"
-              "\"printer_reported_error\":%s,\"printer_messages\":[",
-              complete && !log.error ? "true" : "false", result, (unsigned)req->content_len, (unsigned)received,
-              (unsigned)acked, esp_err_to_name(usb_err), log.printing_completed ? "true" : "false",
-              log.error ? "true" : "false");
-    for (size_t i = 0; i < log.count; i++) {
-        if (i) {
-            sb_putc(&sb, ',');
-        }
-        brother_status_format_json(&log.items[i], &sb);
+    sb_printf(&sb, "{\"ok\":%s,\"job_id\":%lu,\"result\":\"%s\",\"job\":",
+              (j.state == JOB_FAILED || j.state == JOB_INCOMPLETE || j.state == JOB_CANCELLED) ? "false" : "true",
+              (unsigned long)id, print_job_state_name(j.state));
+    print_queue_job_json(&j, &sb);
+    sb_putc(&sb, '}');
+    if (status) {
+        httpd_resp_set_status(req, status);
     }
-    sb_puts(&sb, "]}");
-    if (!complete || log.error) {
-        httpd_resp_set_status(req, "502 Bad Gateway");
-    }
-    ESP_LOGI(TAG, "raw send finished: %s (%u/%u bytes acknowledged)", result, (unsigned)acked,
-             (unsigned)req->content_len);
     return send_json(req, &sb);
 }
+
+/* POST /api/print/raw: queue printer-ready data, answer immediately (202 + job id). */
+static esp_err_t h_print_raw(httpd_req_t *req)
+{
+    uint32_t id = 0;
+    if (submit_from_request(req, &id) != ESP_OK) {
+        return ESP_OK; /* response already sent (or connection gone) */
+    }
+    return send_job(req, "202 Accepted", id);
+}
+
+#if CONFIG_DIAG_ENABLE_RAW_SEND
+/*
+ * POST /api/diag/raw: like /api/print/raw but waits until the job has finished
+ * (used by the test print in the web interface).
+ */
+static esp_err_t h_diag_raw(httpd_req_t *req)
+{
+    if (!s_raw_send_enabled) {
+        return send_json_msg(req, "403 Forbidden", false,
+                             "raw send was disabled on the serial console ('raw_send on' enables it again)");
+    }
+    uint32_t id = 0;
+    if (submit_from_request(req, &id) != ESP_OK) {
+        return ESP_OK;
+    }
+    print_job_info_t j;
+    print_queue_wait(id, 180000, &j);
+    return send_job(req, NULL, id);
+}
 #endif
+
+/* GET /api/jobs */
+static esp_err_t h_jobs(httpd_req_t *req)
+{
+    strbuf_t sb;
+    sb_init(&sb, s_resp, RESP_BUF_SIZE);
+    print_queue_list_json(&sb);
+    return send_json(req, &sb);
+}
+
+/* GET /api/jobs/{id}, DELETE /api/jobs/{id}, POST /api/jobs/{id}/retry */
+static esp_err_t h_job(httpd_req_t *req)
+{
+    const char *p = req->uri + strlen("/api/jobs/");
+    char *end;
+    unsigned long id = strtoul(p, &end, 10);
+    bool retry = strncmp(end, "/retry", 6) == 0 && (end[6] == '\0' || end[6] == '?');
+    bool plain = *end == '\0' || *end == '?';
+    if (end == p || (!plain && !retry)) {
+        return send_json_msg(req, "404 Not Found", false, "unknown job URL");
+    }
+    if (req->method == HTTP_GET && plain) {
+        return send_job(req, NULL, (uint32_t)id);
+    }
+    if (req->method == HTTP_DELETE && plain) {
+        esp_err_t err = print_queue_cancel((uint32_t)id);
+        if (err == ESP_ERR_NOT_FOUND) {
+            return send_json_msg(req, "404 Not Found", false, "job not found");
+        }
+        if (err != ESP_OK) {
+            return send_json_msg(req, "409 Conflict", false, "only queued or waiting jobs can be cancelled");
+        }
+        return send_job(req, NULL, (uint32_t)id);
+    }
+    if (req->method == HTTP_POST && retry) {
+        esp_err_t err = print_queue_retry((uint32_t)id);
+        if (err == ESP_ERR_NOT_FOUND) {
+            return send_json_msg(req, "404 Not Found", false, "job not found");
+        }
+        if (err != ESP_OK) {
+            return send_json_msg(req, "409 Conflict", false,
+                                 "only failed, unknown or cancelled jobs whose data is still kept can be retried");
+        }
+        return send_job(req, "202 Accepted", (uint32_t)id);
+    }
+    return send_json_msg(req, "405 Method Not Allowed", false, "method not allowed for this URL");
+}
 
 /* ------------------------------------------------------------------------- */
 
@@ -535,7 +601,8 @@ esp_err_t web_server_start(void)
 
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 8192;
-    cfg.max_uri_handlers = 16;
+    cfg.max_uri_handlers = 24;
+    cfg.uri_match_fn = httpd_uri_match_wildcard;
     cfg.max_open_sockets = 5;
     cfg.lru_purge_enable = true;
     cfg.recv_wait_timeout = 10;
@@ -559,6 +626,11 @@ esp_err_t web_server_start(void)
         { .uri = "/api/usb/refresh", .method = HTTP_POST, .handler = h_usb_refresh },
         { .uri = "/api/log",         .method = HTTP_GET,  .handler = h_log },
         { .uri = "/api/printer/status", .method = HTTP_GET, .handler = h_printer_status },
+        { .uri = "/api/print/raw",   .method = HTTP_POST, .handler = h_print_raw },
+        { .uri = "/api/jobs",        .method = HTTP_GET,  .handler = h_jobs },
+        { .uri = "/api/jobs/*",      .method = HTTP_GET,  .handler = h_job },
+        { .uri = "/api/jobs/*",      .method = HTTP_DELETE, .handler = h_job },
+        { .uri = "/api/jobs/*",      .method = HTTP_POST, .handler = h_job },
         { .uri = "/api/wifi",        .method = HTTP_POST, .handler = h_wifi_set },
         { .uri = "/api/system/restart", .method = HTTP_POST, .handler = h_restart },
 #if CONFIG_DIAG_ENABLE_RAW_SEND

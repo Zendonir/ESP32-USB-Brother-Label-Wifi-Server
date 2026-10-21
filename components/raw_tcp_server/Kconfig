@@ -1,0 +1,13 @@
+menu "RAW print server (port 9100)"
+
+    config RAW_TCP_PORT
+        int "TCP port"
+        range 1 65535
+        default 9100
+
+    config RAW_TCP_IDLE_TIMEOUT_S
+        int "Abort a job if no data arrives for (s)"
+        range 5 600
+        default 30
+
+endmenu

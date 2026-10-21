@@ -15,6 +15,7 @@ static const char *TAG = "brother";
 #define QUERY_REPLY_TRIES       4
 #define DRAIN_TIMEOUT_MS        20
 #define DRAIN_MAX               8
+#define NEXT_PAGE_WAIT_MS       3000
 
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 static brother_status_t s_last;
@@ -136,6 +137,7 @@ void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, brother_statu
     memset(log, 0, sizeof(*log));
     int64_t end = esp_timer_get_time() + (int64_t)total_ms * 1000;
     int64_t last_rx = 0;
+    int64_t done_at = 0;
     while (esp_timer_get_time() < end) {
         brother_status_t st;
         esp_err_t e = read_one(&st, 250);
@@ -153,12 +155,20 @@ void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, brother_statu
                 log->error = true;
                 break;
             }
-            if (log->printing_completed && st.status_type == BROTHER_ST_PHASE_CHANGE &&
-                st.phase_type == BROTHER_PHASE_RECEIVING) {
-                break;
+            if (st.status_type == BROTHER_ST_PHASE_CHANGE) {
+                if (st.phase_type == BROTHER_PHASE_RECEIVING && log->printing_completed) {
+                    /* Page done. A multi-page job starts the next page right away, so wait
+                     * briefly before treating the whole job as finished. */
+                    done_at = now + (int64_t)NEXT_PAGE_WAIT_MS * 1000;
+                } else if (st.phase_type == BROTHER_PHASE_PRINTING) {
+                    done_at = 0;
+                }
             }
         } else if (e != ESP_ERR_TIMEOUT && e != ESP_ERR_INVALID_RESPONSE) {
             break; /* device gone, no IN endpoint ... */
+        }
+        if (done_at && now > done_at) {
+            break;
         }
         if (last_rx && now - last_rx > (int64_t)idle_ms * 1000) {
             break;

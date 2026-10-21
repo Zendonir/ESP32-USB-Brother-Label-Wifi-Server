@@ -2,7 +2,7 @@
 
 const I18N = {
   en: {
-    title: 'Brother TD-2020A Print Server', phase: 'Phase 3 · Status & test print',
+    title: 'Brother TD-2020A Print Server', phase: 'Phase 4 · Windows printing (port 9100)',
     tab_dash: 'Overview', tab_usb: 'USB diagnostics', tab_wifi: 'Wi-Fi', tab_log: 'Log', tab_sys: 'System',
     conn_err: 'No connection to the device.', printer: 'Printer', product: 'Product', usb_class: 'USB class',
     connects: 'Connects', last_error: 'Last error', wifi: 'Wi-Fi', ip: 'IP address', hostname: 'Hostname',
@@ -34,9 +34,15 @@ const I18N = {
     raw_help: 'A file created by the original Brother driver with "print to file". Sent unchanged.',
     raw_send: 'Send to printer', raw_on: '', raw_off: 'Disabled on the serial console ("raw_send on" enables it again).',
     sending: 'Sending…',
+    tab_jobs: 'Jobs', queue: 'Queue', windows_port: 'Windows port', jobs_title: 'Print jobs',
+    j_state: 'State', j_source: 'Source', j_size: 'Size', j_age: 'Age', j_msg: 'Message',
+    cancel: 'Cancel', retry: 'Retry', no_jobs: 'No jobs yet.',
+    q_summary: '%q waiting · %p printed · %f failed',
+    st_queued: 'queued', st_waiting: 'waiting', st_printing: 'printing', st_printed: 'printed',
+    st_failed: 'failed', st_unknown: 'unconfirmed', st_cancelled: 'cancelled', st_incomplete: 'incomplete',
   },
   de: {
-    title: 'Brother TD-2020A Printserver', phase: 'Phase 3 · Status & Testdruck',
+    title: 'Brother TD-2020A Printserver', phase: 'Phase 4 · Windows-Druck (Port 9100)',
     tab_dash: 'Übersicht', tab_usb: 'USB-Diagnose', tab_wifi: 'WLAN', tab_log: 'Log', tab_sys: 'System',
     conn_err: 'Keine Verbindung zum Gerät.', printer: 'Drucker', product: 'Produkt', usb_class: 'USB-Klasse',
     connects: 'Verbindungen', last_error: 'Letzter Fehler', wifi: 'WLAN', ip: 'IP-Adresse', hostname: 'Hostname',
@@ -70,6 +76,12 @@ const I18N = {
     raw_help: 'Datei, die der originale Brother-Treiber mit „Ausgabe in Datei“ erzeugt hat. Wird unverändert gesendet.',
     raw_send: 'An Drucker senden', raw_on: '', raw_off: 'Über die serielle Konsole abgeschaltet („raw_send on“ schaltet wieder ein).',
     sending: 'Wird gesendet…',
+    tab_jobs: 'Aufträge', queue: 'Warteschlange', windows_port: 'Windows-Port', jobs_title: 'Druckaufträge',
+    j_state: 'Status', j_source: 'Quelle', j_size: 'Größe', j_age: 'Alter', j_msg: 'Meldung',
+    cancel: 'Abbrechen', retry: 'Wiederholen', no_jobs: 'Noch keine Aufträge.',
+    q_summary: '%q wartend · %p gedruckt · %f fehlgeschlagen',
+    st_queued: 'wartet', st_waiting: 'wartet auf Drucker', st_printing: 'druckt', st_printed: 'gedruckt',
+    st_failed: 'fehlgeschlagen', st_unknown: 'unbestätigt', st_cancelled: 'abgebrochen', st_incomplete: 'unvollständig',
   },
 };
 
@@ -138,6 +150,9 @@ function renderStatus(s) {
   $('d-reset').textContent = s.reset_reason;
   $('d-ram').textContent = `${kb(s.memory.internal_free)} (${kb(s.memory.internal_min_free)})`;
   $('d-psram').textContent = `${kb(s.memory.psram_free)} / ${kb(s.memory.psram_total)}`;
+  const q = s.queue;
+  $('d-queue').textContent = t('q_summary').replace('%q', q.queued).replace('%p', q.total_printed).replace('%f', q.total_failed);
+  $('d-rawport').textContent = `${w.ip || w.ap_ip}:${q.raw_port} (RAW)` + (q.raw_allowed !== 'any' ? ` · ${q.raw_allowed}` : '');
   $('f-version').textContent = `${s.firmware.name} ${s.firmware.version} · ${s.firmware.build}`;
 
   $('wifi-locked').classList.toggle('hidden', w.via_setup_ap);
@@ -235,6 +250,35 @@ function renderUsb(u) {
   dl($('usb-devid-fields'), Object.entries(id.fields || {}).map(([k, v]) => [k, esc(v)]));
 }
 
+const STATE_CLASS = { printed: 'ok', failed: 'err', incomplete: 'err', unknown: 'warn', waiting: 'warn', cancelled: '' };
+
+async function loadJobs() {
+  try {
+    const r = await api('/api/jobs');
+    const st = r.stats;
+    $('jobs-stats').textContent = t('q_summary').replace('%q', st.queued).replace('%p', st.total_printed).replace('%f', st.total_failed);
+    const rows = r.jobs.map((j) => {
+      const age = Math.max(0, st.uptime_s - j.created_s);
+      const btn = j.can_cancel ? `<button class="secondary" data-act="cancel" data-id="${j.id}">${t('cancel')}</button>`
+        : j.can_retry ? `<button class="secondary" data-act="retry" data-id="${j.id}">${t('retry')}</button>` : '';
+      return `<tr><td>${j.id}</td><td class="${STATE_CLASS[j.state] || ''}">${esc(t('st_' + j.state))}</td>` +
+        `<td>${j.source === 'raw9100' ? 'Port 9100' : 'HTTP'}</td><td>${esc(j.client)}</td>` +
+        `<td>${(j.size / 1024).toFixed(1)} KiB</td><td>${fmtUptime(age)}</td><td>${esc(j.message)}</td><td>${btn}</td></tr>`;
+    });
+    $('jobs-body').innerHTML = rows.join('') || `<tr><td colspan="8">${t('no_jobs')}</td></tr>`;
+  } catch (e) { /* shown via status */ }
+}
+
+$('jobs-body').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('button[data-act]');
+  if (!b) return;
+  try {
+    await api(b.dataset.act === 'cancel' ? `/api/jobs/${b.dataset.id}` : `/api/jobs/${b.dataset.id}/retry`,
+      { method: b.dataset.act === 'cancel' ? 'DELETE' : 'POST' });
+  } catch (e) { alert(e.message); }
+  loadJobs();
+});
+
 async function loadStatus() {
   try {
     renderStatus(await api('/api/status'));
@@ -266,6 +310,7 @@ function showTab(name) {
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('hidden', p.id !== 'tab-' + name));
   if (name === 'usb') loadUsb();
   if (name === 'log') loadLog();
+  if (name === 'jobs') loadJobs();
 }
 
 document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
@@ -315,5 +360,6 @@ loadStatus();
 setInterval(() => {
   loadStatus();
   if (activeTab === 'usb') loadUsb();
+  if (activeTab === 'jobs') loadJobs();
   if (activeTab === 'log' && $('log-auto').checked) loadLog();
 }, 3000);

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
-  title: Brother TD-2020A Print Server – Diagnostic API (phase 3)
-  version: 0.3.0-dev
+  title: Brother TD-2020A Print Server – API (phase 4)
+  version: 0.4.0-dev
   description: |
     Read-only diagnostic API of the phase 2 firmware. Print endpoints
     (/api/print/*, /api/jobs) and API-key authentication follow in phase 5/7.
@@ -88,6 +88,66 @@ paths:
         '404': { description: cached=1 and no status received yet }
         '409': { description: Printer not connected or a job is running }
         '504': { description: No reply from the printer }
+  /api/print/raw:
+    post:
+      summary: Queue printer-ready data (e.g. produced by the Brother driver); returns immediately
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobResult' }
+        '413': { description: Empty or larger than the maximum job size }
+        '503': { description: Print queue full }
+  /api/jobs:
+    get:
+      summary: All jobs (newest first) and queue statistics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    type: object
+                    properties:
+                      queued: { type: integer }
+                      active_id: { type: integer }
+                      total_printed: { type: integer }
+                      total_failed: { type: integer }
+                      spool_bytes: { type: integer }
+                      uptime_s: { type: integer }
+                  jobs: { type: array, items: { $ref: '#/components/schemas/Job' } }
+  /api/jobs/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      summary: One job
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/JobResult' } } } }
+        '404': { description: Not found }
+    delete:
+      summary: Cancel a queued or waiting job
+      responses:
+        '200': { description: Cancelled, content: { application/json: { schema: { $ref: '#/components/schemas/JobResult' } } } }
+        '404': { description: Not found }
+        '409': { description: Job is printing or already finished }
+  /api/jobs/{id}/retry:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      summary: Queue a failed, unconfirmed or cancelled job again (while its data is kept)
+      responses:
+        '202': { description: Queued again, content: { application/json: { schema: { $ref: '#/components/schemas/JobResult' } } } }
+        '404': { description: Not found }
+        '409': { description: Not retryable }
   /api/log:
     get:
       summary: Buffered log output (most recent ~32 KiB). Never contains passwords.
@@ -148,6 +208,30 @@ paths:
               schema: { $ref: '#/components/schemas/RawResult' }
 components:
   schemas:
+    Job:
+      type: object
+      properties:
+        id: { type: integer }
+        state: { type: string, enum: [queued, waiting, printing, printed, failed, unknown, cancelled, incomplete] }
+        source: { type: string, enum: [raw9100, http] }
+        client: { type: string }
+        size: { type: integer }
+        created_s: { type: integer, description: uptime seconds }
+        started_s: { type: integer }
+        finished_s: { type: integer }
+        attempts: { type: integer }
+        printer_completed: { type: boolean }
+        printer_error: { type: boolean }
+        can_retry: { type: boolean }
+        can_cancel: { type: boolean }
+        message: { type: string }
+    JobResult:
+      type: object
+      properties:
+        ok: { type: boolean }
+        job_id: { type: integer }
+        result: { type: string }
+        job: { $ref: '#/components/schemas/Job' }
     BrotherStatusEnvelope:
       type: object
       properties:

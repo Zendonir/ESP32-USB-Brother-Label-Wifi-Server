@@ -1,11 +1,14 @@
 #include "console_cmds.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "app_network.h"
 #include "brother_printer.h"
 #include "diag_log.h"
+#include "print_queue.h"
+#include "raw_tcp_server.h"
 #include "esp_console.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -14,6 +17,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "usb_printer.h"
+#include "sdkconfig.h"
 #include "web_server.h"
 #include "wifi_manager.h"
 
@@ -75,6 +79,40 @@ static int cmd_raw_send(int argc, char **argv)
         return 1;
     }
     printf("POST /api/diag/raw is %s\n", web_server_raw_send_enabled() ? "enabled" : "disabled until restart");
+    return 0;
+}
+
+static int cmd_jobs(int argc, char **argv)
+{
+    if (argc == 3 && (strcmp(argv[1], "cancel") == 0 || strcmp(argv[1], "retry") == 0)) {
+        uint32_t id = (uint32_t)strtoul(argv[2], NULL, 10);
+        esp_err_t err = argv[1][0] == 'c' ? print_queue_cancel(id) : print_queue_retry(id);
+        printf("%s\n", err == ESP_OK ? "ok" : esp_err_to_name(err));
+        return err == ESP_OK ? 0 : 1;
+    }
+    if (argc != 1) {
+        printf("usage: jobs [cancel <id> | retry <id>]\n");
+        return 1;
+    }
+    print_queue_print_list();
+    return 0;
+}
+
+static int cmd_raw_allow(int argc, char **argv)
+{
+    if (argc == 2) {
+        esp_err_t err = raw_tcp_server_set_allowed(argv[1]);
+        if (err != ESP_OK) {
+            printf("invalid value, use 'any', an address or a network like 192.168.3.0/24\n");
+            return 1;
+        }
+    } else if (argc != 1) {
+        printf("usage: raw_allow [any | a.b.c.d | a.b.c.d/nn]\n");
+        return 1;
+    }
+    char buf[24];
+    raw_tcp_server_get_allowed(buf, sizeof(buf));
+    printf("port %d accepts print jobs from: %s\n", CONFIG_RAW_TCP_PORT, buf);
     return 0;
 }
 
@@ -200,6 +238,10 @@ void console_start(void)
         { .command = "raw_send", .hint = "[on|off]",
           .help = "Enable/disable POST /api/diag/raw (test print with a driver file); default on",
           .func = cmd_raw_send },
+        { .command = "jobs", .hint = "[cancel <id> | retry <id>]", .help = "Show the print queue / cancel / retry a job",
+          .func = cmd_jobs },
+        { .command = "raw_allow", .hint = "[any | a.b.c.d/nn]",
+          .help = "Show/limit which clients may print on port 9100", .func = cmd_raw_allow },
         { .command = "status", .help = "Show printer, Wi-Fi and memory status", .func = cmd_status },
         { .command = "wifi_set", .hint = "<ssid> [password]", .help = "Store Wi-Fi credentials and connect",
           .func = cmd_wifi_set },

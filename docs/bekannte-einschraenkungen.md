@@ -1,4 +1,4 @@
-# Bekannte Einschränkungen (Stand Phase 3)
+# Bekannte Einschränkungen (Stand Phase 4)
 
 ## Stand der Hardware-Tests
 
@@ -11,7 +11,14 @@ Ein Testdruck mit einer Datei des Originaltreibers wurde gedruckt; der Drucker h
 
 ## Funktionsumfang dieser Phase
 
-- **Kein Druck über Port 9100, keine REST-Druck-API, keine Warteschlange.** Folgt in Phase 4/5.
+- Port 9100 (RAW) und `POST /api/print/raw` mit gemeinsamer Warteschlange (ab 0.4.0). Noch nicht:
+  P-touch-Template-API, API-Key (Phase 5/7), IPP/AirPrint.
+- Aufträge werden vollständig im PSRAM zwischengespeichert (max. 4 MiB je Auftrag, 6 MiB gesamt),
+  bevor sie gedruckt werden – so erreicht eine abgebrochene Übertragung nie den Drucker.
+- Port 9100 nimmt Verbindungen nacheinander an (weitere warten im Backlog); da nur empfangen und
+  nicht gedruckt wird, ist das schnell. Kein SNMP, kein bidirektionaler Kanal zu Windows.
+- Die Auftragsliste lebt im RAM (24 Einträge) und geht bei einem Neustart verloren; Zeiten sind
+  Laufzeit seit Start (noch keine Uhrzeit/SNTP).
 - Brother-Befehle (ab 0.3.0): nur die dokumentierte Statusabfrage (Invalidate, `ESC @`, `ESC i S`)
   und der Abbruch eines unvollständigen Auftrags (Invalidate + `ESC @`). Keine eigenen Raster- oder
   Template-Daten.

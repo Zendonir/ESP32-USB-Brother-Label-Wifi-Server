@@ -10,10 +10,11 @@
 <header>
   <div class="brand">
     <h1 data-i18n="title">Brother TD-2020A Printserver</h1>
-    <span class="badge" data-i18n="phase">Phase 3 · Status &amp; Testdruck</span>
+    <span class="badge" data-i18n="phase">Phase 4 · Windows-Druck (Port 9100)</span>
   </div>
   <nav>
     <button class="tab active" data-tab="dash" data-i18n="tab_dash">Übersicht</button>
+    <button class="tab" data-tab="jobs" data-i18n="tab_jobs">Aufträge</button>
     <button class="tab" data-tab="usb" data-i18n="tab_usb">USB-Diagnose</button>
     <button class="tab" data-tab="wifi" data-i18n="tab_wifi">WLAN</button>
     <button class="tab" data-tab="log" data-i18n="tab_log">Log</button>
@@ -37,6 +38,8 @@
           <dt data-i18n="usb_class">USB-Klasse</dt><dd id="d-class">–</dd>
           <dt data-i18n="connects">Verbindungen</dt><dd id="d-connects">–</dd>
           <dt data-i18n="last_error">Letzter Fehler</dt><dd id="d-lasterr">–</dd>
+          <dt data-i18n="queue">Warteschlange</dt><dd id="d-queue">–</dd>
+          <dt data-i18n="windows_port">Windows-Port</dt><dd id="d-rawport">–</dd>
         </dl>
       </div>
       <div class="card">
@@ -72,6 +75,22 @@
     </div>
     <p class="hint" data-i18n="phase_hint">Diese Firmware ist der Diagnosestand (Phase 2): Sie erkennt den Drucker und liest
       alle USB-Deskriptoren aus. Druckfunktionen (Port 9100, REST-Druck, Warteschlange) folgen in den nächsten Phasen.</p>
+  </section>
+
+  <!-- Jobs -->
+  <section id="tab-jobs" class="panel hidden">
+    <div class="card">
+      <h2 data-i18n="jobs_title">Druckaufträge</h2>
+      <p class="hint" id="jobs-stats"></p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>ID</th><th data-i18n="j_state">Status</th><th data-i18n="j_source">Quelle</th>
+            <th>Client</th><th data-i18n="j_size">Größe</th><th data-i18n="j_age">Alter</th>
+            <th data-i18n="j_msg">Meldung</th><th></th></tr></thead>
+          <tbody id="jobs-body"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- USB -->
@@ -160,6 +179,8 @@
         <li><code>GET /api/usb</code> · <code>GET /api/usb/text</code> · <code>POST /api/usb/refresh</code></li>
         <li><code>GET /api/log</code></li>
         <li><code>GET /api/printer/status</code> · <code>?cached=1</code></li>
+        <li><code>POST /api/print/raw</code> · <code>GET /api/jobs</code> · <code>GET|DELETE /api/jobs/{id}</code> · <code>POST /api/jobs/{id}/retry</code></li>
+        <li><code>TCP 9100</code> RAW (Windows: Standard-TCP/IP-Port)</li>
         <li><code>POST /api/wifi</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
         <li><code>POST /api/system/restart</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
         <li id="api-raw" class="hidden"><code>POST /api/diag/raw</code> <span data-i18n="raw_hint">(Testdruck mit Treiberdatei)</span></li>

@@ -1,0 +1,21 @@
+menu "Print queue"
+
+    config PRINT_QUEUE_MAX_JOB_BYTES
+        int "Maximum size of one print job (bytes)"
+        range 65536 8388608
+        default 4194304
+        help
+            Jobs are spooled completely (in PSRAM) before they are sent to
+            the printer, so an interrupted transfer never reaches it.
+
+    config PRINT_QUEUE_MEMORY_BUDGET
+        int "Memory for all spooled jobs incl. kept failed jobs (bytes)"
+        range 65536 8388608
+        default 6291456
+
+    config PRINT_QUEUE_WAIT_PRINTER_S
+        int "How long a job waits for the printer (not connected / error) before it fails (s)"
+        range 10 86400
+        default 600
+
+endmenu

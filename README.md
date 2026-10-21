@@ -37,7 +37,7 @@ ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
 | 1 | Hardware- und Protokollanalyse | ✅ [Bericht](docs/phase1-analyse.md) – offene Punkte müssen am Gerät gemessen werden |
 | 2 | USB-Diagnose-Firmware | ✅ **am echten TD-2020A getestet** (21.10.2026): VID/PID 0x04F9/0x2055, Printer Class, Bulk IN 0x81 / OUT 0x02 |
 | 3 | Brother-Statusabfrage, Testdruck mit Treiberdatei, sichere Übertragung | ✅ **erster Druck über den ESP32** (21.10.2026); Fehlerfälle noch offen |
-| 4 | WLAN + RAW-TCP 9100 für Windows | 🔜 |
+| 4 | WLAN + RAW-TCP 9100 für Windows, Druckwarteschlange | 🚧 implementiert (0.4.0-dev), ⏳ Test mit Windows |
 | 5 | REST-API + zentrale Warteschlange | 🔜 |
 | 6 | Vollständiges Webinterface | 🔜 (Diagnose-UI vorhanden) |
 | 7 | OTA, API-Key, Recovery | 🔜 (Partitionen und Rollback vorbereitet) |
@@ -187,6 +187,21 @@ Setup-WLAN heraus ändern, nicht aus dem Heimnetz.
 Falls gar nichts erkannt wird: Ohne VBUS gibt es keine einzige USB-Logzeile. Mit VBUS, aber
 fehlerhafter Enumeration, erscheinen `ENUM`-Fehlermeldungen der ESP-IDF – bitte mitschicken.
 
+## Phase 4: Drucken aus Windows (Port 9100)
+
+Anleitung: **[docs/windows-einrichtung.md](docs/windows-einrichtung.md)** – Standard-TCP/IP-Port,
+Protokoll **Raw**, Port **9100**, SNMP aus, originaler Brother-Treiber.
+
+- Jeder Auftrag wird vollständig empfangen und erst dann gedruckt; bricht die Übertragung ab,
+  wird nichts gedruckt (`unvollständig`).
+- Eine zentrale Warteschlange (FIFO) für Port 9100 und HTTP; nie zwei Aufträge gleichzeitig.
+- Vor dem Druck wird der Brother-Status geprüft: Bei offenem Deckel/fehlendem Papier oder ohne
+  USB-Verbindung **wartet** der Auftrag (bis 10 min) und druckt danach automatisch.
+- Ergebnis laut Drucker: `gedruckt`, `fehlgeschlagen` (Drucker verwirft den Auftrag – kein
+  automatischer Nachdruck, „Wiederholen“ im Webinterface), `unbestätigt`.
+- Webinterface → **Aufträge**; Konsole `jobs`, `jobs retry <id>`, `jobs cancel <id>`;
+  `raw_allow 192.168.3.0/24` begrenzt Port 9100 auf ein Netz.
+
 ## Phase 3: Status und Testdruck
 
 **Status:** Konsole `brother_status` oder im Webinterface „Status abfragen“. Gezeigt werden Medium
@@ -241,6 +256,8 @@ Enumeration (`ENUM: ...`). Kommt **gar nichts**, sieht der ESP32 keinen Pull-up 
 | `usb` | vollständigen USB-Bericht ausgeben |
 | `usb_refresh` | IEEE-1284-ID und Port-Status neu abfragen, Bericht ausgeben |
 | `usb_read` | einmal vom Bulk-IN-Endpoint lesen (1 s), Hexdump |
+| `jobs [cancel <id>\|retry <id>]` | Druckwarteschlange anzeigen, Auftrag abbrechen/wiederholen |
+| `raw_allow [any\|a.b.c.d/nn]` | Port 9100 auf ein Netz/eine Adresse beschränken |
 | `brother_status` | Brother-Statusabfrage (`ESC i S`): Medium, Breite, Fehler, Phase |
 | `raw_send [on\|off]` | Testdruck-Upload (`/api/diag/raw`) bis zum Neustart abschalten/einschalten (Standard: an) |
 | `status` | Drucker, WLAN, Speicher |
@@ -265,6 +282,10 @@ Webinterface: `http://brother-td2020.local/` bzw. `http://192.168.4.1/` (Setup-W
 | GET | `/api/usb/text` | USB-Bericht (Text, wie Konsole) |
 | POST | `/api/usb/refresh` | IEEE-1284-ID/Port-Status neu abfragen |
 | GET | `/api/log` | Log |
+| POST | `/api/print/raw` | druckfertige Daten in die Warteschlange (202 + Job-ID) |
+| GET | `/api/jobs` | alle Aufträge + Statistik |
+| GET/DELETE | `/api/jobs/{id}` | Auftrag abfragen / abbrechen (wartend) |
+| POST | `/api/jobs/{id}/retry` | fehlgeschlagenen Auftrag erneut drucken |
 | GET | `/api/printer/status` | Brother-Status live abfragen (`?cached=1`: letzter Stand ohne Druckerzugriff) |
 | POST | `/api/wifi` | WLAN setzen – **nur über Setup-WLAN** |
 | POST | `/api/system/restart` | Neustart – **nur über Setup-WLAN** |
