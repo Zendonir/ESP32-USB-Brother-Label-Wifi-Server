@@ -238,6 +238,27 @@ des Printservers eintragen (`.local` löst ein Docker-Container meist nicht auf;
 Router eine feste Adresse vergeben), die Treiberdatei des ersten Testdrucks (`test.prn`)
 einlesen, Testetikett drucken.
 
+## Druckereinstellungen (ab 0.4.2)
+
+Startseite → **Druckereinstellungen** (und im Lebensmittel-Server unter *Etiketten → Brother-Drucker*):
+Einstellungen, die der TD-2020A in seinem Speicher behält. Gesetzt werden sie mit den
+dokumentierten statischen Befehlen der P-touch Template Command Reference (`ESC i X <x> 2 01h 00h n`,
+gelesen mit `ESC i X <x> 1 00h 00h` → `01h 00h n`):
+
+| Einstellung | Befehl | Empfehlung |
+|---|---|---|
+| Befehlsmodus (ESC/P, Raster, P-touch Template) | `ESC i X i` | **Raster** – Server und Windows-Treiber schicken Rasterdaten |
+| Druckpriorität (Geschwindigkeit/Qualität) | `ESC i X q` | Geschwindigkeit; Qualität, wenn kleine QR-Codes schlecht lesbar sind |
+| Druck um 180° drehen | `ESC i X h` | aus (gedreht wird im Lebensmittel-Server) |
+| Stoppposition (Abreißkante/Druckkopf) | `ESC i X ^` | Abreißkante |
+| Nach Fehler erneut drucken | `ESC i X d` | **aus** – sonst druckt der Drucker nach einem Fehler selbst nach |
+
+Stromsparen, Druckdichte, „Vorderkante ausrichten“, Sensorempfindlichkeit und das **Papierformat**
+(Etiketten oder Endlosband, Größe) haben keinen dokumentierten Befehl. Sie bleiben im Brother-Tool
+„Geräteeinstellungen“ bzw. im Treiber unter *Papierformat einrichten*. Eine damit gedruckte
+`.prn` enthält die Medieninformation (`ESC i U`); im Lebensmittel-Server eingelesen, stellt sie
+den Drucker bei jedem Auftrag auf das richtige Medium.
+
 ## Phase 3: Status und Testdruck
 
 **Status:** Konsole `brother_status` oder im Webinterface „Status abfragen“. Gezeigt werden Medium
@@ -323,6 +344,7 @@ Webinterface: `http://brother-td2020.local/` bzw. `http://192.168.4.1/` (Setup-W
 | GET/DELETE | `/api/jobs/{id}` | Auftrag abfragen / abbrechen (wartend) |
 | POST | `/api/jobs/{id}/retry` | fehlgeschlagenen Auftrag erneut drucken |
 | GET | `/api/printer/status` | Brother-Status live abfragen (`?cached=1`: letzter Stand ohne Druckerzugriff) |
+| GET/POST | `/api/printer/settings` | im Drucker gespeicherte Einstellungen lesen / setzen (`command_mode=1&recovery=0`), ab 0.4.2 |
 | POST | `/api/wifi` | WLAN setzen – **nur über Setup-WLAN** |
 | POST | `/api/system/restart` | Neustart – **nur über Setup-WLAN** |
 | POST | `/api/diag/raw` | Treiberdatei unverändert an den Drucker (Testdruck) |

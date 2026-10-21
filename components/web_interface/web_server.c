@@ -304,7 +304,8 @@ static esp_err_t h_status(httpd_req_t *req)
 
     /* What senders such as the Lebensmittel-Server check before using the print API:
      * job_key = X-Job-Key is honoured (no duplicate label after a repeated request). */
-    sb_printf(&sb, "\"print_api\":{\"version\":1,\"job_name\":true,\"job_key\":true,\"max_job_bytes\":%d},",
+    sb_printf(&sb, "\"print_api\":{\"version\":1,\"job_name\":true,\"job_key\":true,\"settings\":true,"
+              "\"max_job_bytes\":%d},",
               CONFIG_PRINT_QUEUE_MAX_JOB_BYTES);
 
 #if CONFIG_DIAG_ENABLE_RAW_SEND
@@ -372,6 +373,76 @@ static esp_err_t h_printer_status(httpd_req_t *req)
     sb_json_key(&sb, "printer");
     json_brother_status(&sb, &st, age_ms);
     sb_putc(&sb, '}');
+    return send_json(req, &sb);
+}
+
+/* JSON of all settings with their current values (value -1 = no answer). */
+static void json_settings(strbuf_t *sb, const brother_setting_io_t *io)
+{
+    sb_puts(sb, "{\"ok\":true,\"settings\":[");
+    for (size_t i = 0; i < brother_settings_count; i++) {
+        const brother_setting_def_t *d = &brother_settings[i];
+        sb_printf(sb, "%s{\"key\":\"%s\",\"name\":", i ? "," : "", d->key);
+        sb_json_str(sb, d->name);
+        sb_printf(sb, ",\"value\":%d,\"options\":[", io[i].value);
+        for (uint8_t k = 0; k < d->n_options; k++) {
+            sb_printf(sb, "%s{\"value\":%u,\"label\":", k ? "," : "", d->values[k]);
+            sb_json_str(sb, d->labels[k]);
+            sb_putc(sb, '}');
+        }
+        sb_puts(sb, "]}");
+    }
+    sb_puts(sb, "],\"note\":\"Only settings with a documented Brother command. Power, density, sensor "
+                "adjustment and the paper size stay in the Brother Printer Setting Tool.\"}");
+}
+
+/*
+ * GET  /api/printer/settings                 -> read all settings from the printer
+ * POST /api/printer/settings  key=value&...  -> write the given ones, then read all back
+ * Settings live in the printer's non-volatile memory (Brother static commands).
+ */
+static esp_err_t h_printer_settings(httpd_req_t *req)
+{
+    brother_setting_io_t io[8];
+    for (size_t i = 0; i < brother_settings_count && i < 8; i++) {
+        io[i].cmd = brother_settings[i].cmd;
+        io[i].set_value = -1;
+        io[i].value = -1;
+    }
+    if (req->method == HTTP_POST) {
+        char body[256];
+        if (recv_body(req, body, sizeof(body)) < 0) {
+            return send_json_msg(req, "400 Bad Request", false, "body missing or too large");
+        }
+        int changes = 0;
+        for (size_t i = 0; i < brother_settings_count && i < 8; i++) {
+            char v[8];
+            if (httpd_query_key_value(body, brother_settings[i].key, v, sizeof(v)) != ESP_OK) {
+                continue;
+            }
+            char *end;
+            long n = strtol(v, &end, 10);
+            if (end == v || *end || n < 0 || n > 255 ||
+                !brother_setting_value_valid(&brother_settings[i], (uint8_t)n)) {
+                return send_json_msg(req, "400 Bad Request", false, "invalid value for a setting");
+            }
+            io[i].set_value = (int)n;
+            changes++;
+        }
+        if (!changes) {
+            return send_json_msg(req, "400 Bad Request", false, "no known setting in the request");
+        }
+    }
+    esp_err_t err = brother_settings_exchange(io, brother_settings_count);
+    if (err == ESP_ERR_INVALID_STATE) {
+        return send_json_msg(req, "409 Conflict", false, "printer not connected or busy with a job");
+    }
+    if (err != ESP_OK) {
+        return send_json_msg(req, "502 Bad Gateway", false, esp_err_to_name(err));
+    }
+    strbuf_t sb;
+    sb_init(&sb, s_resp, RESP_BUF_SIZE);
+    json_settings(&sb, io);
     return send_json(req, &sb);
 }
 
@@ -701,6 +772,8 @@ esp_err_t web_server_start(void)
         { .uri = "/api/usb/refresh", .method = HTTP_POST, .handler = h_usb_refresh },
         { .uri = "/api/log",         .method = HTTP_GET,  .handler = h_log },
         { .uri = "/api/printer/status", .method = HTTP_GET, .handler = h_printer_status },
+        { .uri = "/api/printer/settings", .method = HTTP_GET, .handler = h_printer_settings },
+        { .uri = "/api/printer/settings", .method = HTTP_POST, .handler = h_printer_settings },
         { .uri = "/api/print/raw",   .method = HTTP_POST, .handler = h_print_raw },
         { .uri = "/api/jobs",        .method = HTTP_GET,  .handler = h_jobs },
         { .uri = "/api/jobs/*",      .method = HTTP_GET,  .handler = h_job },

@@ -199,3 +199,92 @@ size_t brother_build_status_query(uint8_t *buf, size_t size)
     memcpy(buf + BROTHER_INVALIDATE_LEN + 2, BROTHER_CMD_STATUS_REQUEST, 3);
     return n;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Settings (static commands)                                                */
+/* ------------------------------------------------------------------------- */
+
+const brother_setting_def_t brother_settings[] = {
+    { 'i', "command_mode", "Command mode", 3, { 0x00, 0x01, 0x03 },
+      { "ESC/P", "Raster", "P-touch Template" } },
+    { 'q', "print_priority", "Print priority", 2, { 0x00, 0x01 },
+      { "Speed", "Quality" } },
+    { 'h', "rotate", "Rotate print 180 degrees", 2, { 0x00, 0x01 },
+      { "No rotation", "180 degrees" } },
+    { '^', "stop_position", "Print stop position", 2, { 0x00, 0x01 },
+      { "Tear bar", "Head" } },
+    { 'd', "recovery", "Reprint after an error (recovery print)", 2, { 0x00, 0x01 },
+      { "Off", "On" } },
+};
+const size_t brother_settings_count = sizeof(brother_settings) / sizeof(brother_settings[0]);
+
+const brother_setting_def_t *brother_setting_find(const char *key)
+{
+    for (size_t i = 0; i < brother_settings_count; i++) {
+        if (strcmp(brother_settings[i].key, key) == 0) {
+            return &brother_settings[i];
+        }
+    }
+    return NULL;
+}
+
+bool brother_setting_value_valid(const brother_setting_def_t *def, uint8_t value)
+{
+    for (uint8_t i = 0; i < def->n_options; i++) {
+        if (def->values[i] == value) {
+            return true;
+        }
+    }
+    return false;
+}
+
+const char *brother_setting_label(const brother_setting_def_t *def, int value)
+{
+    for (uint8_t i = 0; i < def->n_options; i++) {
+        if (def->values[i] == value) {
+            return def->labels[i];
+        }
+    }
+    return "unknown";
+}
+
+size_t brother_build_settings_prefix(uint8_t *buf, size_t size)
+{
+    const size_t n = BROTHER_INVALIDATE_LEN + 2 + 4;
+    if (size < n) {
+        return 0;
+    }
+    memset(buf, BROTHER_CMD_INVALIDATE, BROTHER_INVALIDATE_LEN);
+    memcpy(buf + BROTHER_INVALIDATE_LEN, BROTHER_CMD_INITIALIZE, 2);
+    memcpy(buf + BROTHER_INVALIDATE_LEN + 2, "\x1b\x69\x61\x03", 4);
+    return n;
+}
+
+size_t brother_build_setting_get(char cmd, uint8_t *buf, size_t size)
+{
+    if (size < 7) {
+        return 0;
+    }
+    const uint8_t c[7] = { 0x1b, 0x69, 0x58, (uint8_t)cmd, 0x31, 0x00, 0x00 };
+    memcpy(buf, c, sizeof(c));
+    return sizeof(c);
+}
+
+size_t brother_build_setting_set(char cmd, uint8_t value, uint8_t *buf, size_t size)
+{
+    if (size < 8) {
+        return 0;
+    }
+    const uint8_t c[8] = { 0x1b, 0x69, 0x58, (uint8_t)cmd, 0x32, 0x01, 0x00, value };
+    memcpy(buf, c, sizeof(c));
+    return sizeof(c);
+}
+
+bool brother_setting_parse_reply(const uint8_t *data, size_t len, uint8_t *value)
+{
+    if (len != 3 || data[0] != 0x01 || data[1] != 0x00) {
+        return false;
+    }
+    *value = data[2];
+    return true;
+}

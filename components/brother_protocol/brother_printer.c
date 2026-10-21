@@ -6,6 +6,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "usb_printer.h"
 
 static const char *TAG = "brother";
@@ -174,6 +175,68 @@ void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, brother_statu
             break;
         }
     }
+}
+
+/* Reply to a retrieve command (01h 00h value); status messages in between are kept as "last status". */
+static int read_setting_reply(void)
+{
+    for (int i = 0; i < QUERY_REPLY_TRIES; i++) {
+        uint8_t buf[64];
+        size_t got = 0;
+        esp_err_t err = usb_printer_read(buf, sizeof(buf), &got, QUERY_REPLY_TIMEOUT_MS);
+        if (err != ESP_OK && err != ESP_ERR_TIMEOUT) {
+            return -1;
+        }
+        uint8_t v;
+        if (got && brother_setting_parse_reply(buf, got, &v)) {
+            return v;
+        }
+        brother_status_t st;
+        if (got && brother_status_parse(buf, got, &st)) {
+            remember(&st);
+        }
+    }
+    return -1;
+}
+
+esp_err_t brother_settings_exchange(brother_setting_io_t *io, size_t n)
+{
+    if (usb_printer_job_begin(0) != ESP_OK) {
+        return ESP_ERR_INVALID_STATE; /* never between a job's data and its end */
+    }
+    usb_printer_summary_t sum;
+    usb_printer_get_summary(&sum);
+    esp_err_t err = ESP_ERR_INVALID_STATE;
+    if (!sum.ready) {
+        goto out;
+    }
+    /* Drop messages the printer sent earlier on its own. */
+    brother_status_t st;
+    for (int i = 0; i < DRAIN_MAX; i++) {
+        if (read_one(&st, DRAIN_TIMEOUT_MS) == ESP_ERR_TIMEOUT) {
+            break;
+        }
+    }
+    uint8_t buf[BROTHER_INVALIDATE_LEN + 8];
+    size_t len = brother_build_settings_prefix(buf, sizeof(buf));
+    err = usb_printer_write(buf, len, QUERY_WRITE_TIMEOUT_MS, NULL);
+    for (size_t i = 0; err == ESP_OK && i < n; i++) {
+        if (io[i].set_value >= 0) {
+            len = brother_build_setting_set(io[i].cmd, (uint8_t)io[i].set_value, buf, sizeof(buf));
+            err = usb_printer_write(buf, len, QUERY_WRITE_TIMEOUT_MS, NULL);
+            ESP_LOGI(TAG, "setting %c := %d (%s)", io[i].cmd, io[i].set_value, esp_err_to_name(err));
+            if (err != ESP_OK) {
+                break;
+            }
+            vTaskDelay(pdMS_TO_TICKS(100)); /* stored in non-volatile memory */
+        }
+        len = brother_build_setting_get(io[i].cmd, buf, sizeof(buf));
+        err = usb_printer_write(buf, len, QUERY_WRITE_TIMEOUT_MS, NULL);
+        io[i].value = err == ESP_OK ? read_setting_reply() : -1;
+    }
+out:
+    usb_printer_job_end();
+    return err;
 }
 
 esp_err_t brother_cancel_job(void)

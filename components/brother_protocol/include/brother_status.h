@@ -106,6 +106,46 @@ void brother_status_format_text(const brother_status_t *st, strbuf_t *sb);
  */
 size_t brother_build_status_query(uint8_t *buf, size_t size);
 
+/*
+ * Printer settings stored in the printer's non-volatile memory ("static
+ * commands", P-touch Template 2.0 Command Reference 3.08, chapter 8, for TD-20XX):
+ *   set:      ESC i X <cmd> 2 01h 00h <value>
+ *   retrieve: ESC i X <cmd> 1 00h 00h  ->  reply 01h 00h <value>
+ * Only settings with a documented command are listed. Power, density, sensor
+ * adjustment and the media definition have no documented command; they stay in
+ * the Brother "Printer Setting Tool" (media: Paper Size Setup in the driver).
+ */
+#define BROTHER_SETTING_MAX_OPTIONS 4
+
+typedef struct {
+    char cmd;                   /* the letter after ESC i X */
+    const char *key;            /* API name */
+    const char *name;           /* English label */
+    uint8_t n_options;
+    uint8_t values[BROTHER_SETTING_MAX_OPTIONS];
+    const char *labels[BROTHER_SETTING_MAX_OPTIONS];
+} brother_setting_def_t;
+
+extern const brother_setting_def_t brother_settings[];
+extern const size_t brother_settings_count;
+
+const brother_setting_def_t *brother_setting_find(const char *key);
+bool brother_setting_value_valid(const brother_setting_def_t *def, uint8_t value);
+const char *brother_setting_label(const brother_setting_def_t *def, int value);
+
+/*
+ * Prefix for a settings session: invalidate, initialize and switch to P-touch
+ * Template mode (ESC i a 03h) where the ESC i X commands are interpreted.
+ * Returns the number of bytes (206) or 0 if `size` is too small.
+ */
+size_t brother_build_settings_prefix(uint8_t *buf, size_t size);
+/* ESC i X <cmd> 1 00h 00h (7 bytes) */
+size_t brother_build_setting_get(char cmd, uint8_t *buf, size_t size);
+/* ESC i X <cmd> 2 01h 00h <value> (8 bytes) */
+size_t brother_build_setting_set(char cmd, uint8_t value, uint8_t *buf, size_t size);
+/* Reply 01h 00h <value>. False for anything else (e.g. a 32-byte status message). */
+bool brother_setting_parse_reply(const uint8_t *data, size_t len, uint8_t *value);
+
 #ifdef __cplusplus
 }
 #endif
