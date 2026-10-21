@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "app_network.h"
+#include "brother_printer.h"
 #include "diag_log.h"
 #include "esp_console.h"
 #include "esp_heap_caps.h"
@@ -13,6 +14,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "usb_printer.h"
+#include "web_server.h"
 #include "wifi_manager.h"
 
 static const char *TAG = "console";
@@ -45,6 +47,35 @@ static int cmd_usb_read(int argc, char **argv)
     }
     printf("\n");
     return err == ESP_OK || err == ESP_ERR_TIMEOUT ? 0 : 1;
+}
+
+static int cmd_brother_status(int argc, char **argv)
+{
+    brother_status_t st;
+    esp_err_t err = brother_query_status(&st);
+    if (err != ESP_OK) {
+        printf("status request failed: %s\n", err == ESP_ERR_INVALID_STATE ? "printer not connected or busy"
+               : esp_err_to_name(err));
+        return 1;
+    }
+    static char buf[512];
+    strbuf_t sb;
+    sb_init(&sb, buf, sizeof(buf));
+    brother_status_format_text(&st, &sb);
+    fputs(buf, stdout);
+    return 0;
+}
+
+static int cmd_raw_send(int argc, char **argv)
+{
+    if (argc == 2 && (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "off") == 0)) {
+        web_server_set_raw_send(strcmp(argv[1], "on") == 0);
+    } else if (argc != 1) {
+        printf("usage: raw_send [on|off]\n");
+        return 1;
+    }
+    printf("POST /api/diag/raw is %s\n", web_server_raw_send_enabled() ? "ENABLED (until restart)" : "disabled");
+    return 0;
 }
 
 static int cmd_status(int argc, char **argv)
@@ -164,6 +195,11 @@ void console_start(void)
           .func = cmd_usb_refresh },
         { .command = "usb_read", .help = "Read once from the bulk IN endpoint (1 s timeout) and hex dump the data",
           .func = cmd_usb_read },
+        { .command = "brother_status", .help = "Query the Brother printer status (ESC i S): media, errors, phase",
+          .func = cmd_brother_status },
+        { .command = "raw_send", .hint = "[on|off]",
+          .help = "Allow POST /api/diag/raw (send a driver-generated print file) until restart",
+          .func = cmd_raw_send },
         { .command = "status", .help = "Show printer, Wi-Fi and memory status", .func = cmd_status },
         { .command = "wifi_set", .hint = "<ssid> [password]", .help = "Store Wi-Fi credentials and connect",
           .func = cmd_wifi_set },

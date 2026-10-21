@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
-  title: Brother TD-2020A Print Server – Diagnostic API (phase 2)
-  version: 0.2.0-diag
+  title: Brother TD-2020A Print Server – Diagnostic API (phase 3)
+  version: 0.3.0-dev
   description: |
     Read-only diagnostic API of the phase 2 firmware. Print endpoints
     (/api/print/*, /api/jobs) and API-key authentication follow in phase 5/7.
@@ -66,6 +66,28 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Message' }
+  /api/printer/status:
+    get:
+      summary: Brother status request (invalidate, ESC @, ESC i S) and its 32-byte reply
+      parameters:
+        - name: cached
+          in: query
+          required: false
+          schema: { type: string, enum: ["1"] }
+          description: "1 = return the last received status without talking to the printer"
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  printer: { $ref: '#/components/schemas/BrotherStatusEnvelope' }
+        '404': { description: cached=1 and no status received yet }
+        '409': { description: Printer not connected or a job is running }
+        '504': { description: No reply from the printer }
   /api/log:
     get:
       summary: Buffered log output (most recent ~32 KiB). Never contains passwords.
@@ -99,11 +121,12 @@ paths:
         '403': { description: Not connected through the setup AP, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
   /api/diag/raw:
     post:
-      summary: "DEVELOPMENT ONLY (Kconfig DIAG_ENABLE_RAW_SEND, default off): forward body unchanged to bulk OUT"
+      summary: "DEVELOPMENT: forward a driver-generated print file unchanged to bulk OUT"
       description: |
-        Only registered when the firmware was built with CONFIG_DIAG_ENABLE_RAW_SEND=y.
-        No authentication, no queue. A successful USB acknowledgement does not confirm
-        a physical print.
+        Disabled after every boot; enable on the serial console with `raw_send on`.
+        No authentication, no queue. After the transfer the firmware collects the
+        printer's own status messages for up to 30 s; `result` is `printed` only if
+        the printer reported "printing completed".
       requestBody:
         required: true
         content:
@@ -115,7 +138,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RawResult' }
-        '409': { description: Printer not ready }
+        '403': { description: Not enabled on the serial console }
+        '409': { description: Printer not ready or busy }
         '413': { description: Empty or too large }
         '502':
           description: USB transfer failed or incomplete
@@ -124,6 +148,33 @@ paths:
               schema: { $ref: '#/components/schemas/RawResult' }
 components:
   schemas:
+    BrotherStatusEnvelope:
+      type: object
+      properties:
+        age_ms: { type: integer }
+        status: { $ref: '#/components/schemas/BrotherStatus' }
+    BrotherStatus:
+      type: object
+      properties:
+        model_code: { type: string, example: "3" }
+        model: { type: string, example: TD-2020 }
+        status_type: { type: string, enum: [reply_to_status_request, printing_completed, error_occurred, exit_if_mode, turned_off, notification, phase_change, unknown] }
+        phase: { type: string, enum: [receiving, printing, unknown] }
+        phase_number: { type: integer }
+        notification: { type: string }
+        battery: { type: string }
+        media_type: { type: string, enum: [none, continuous_tape, die_cut_labels, unknown] }
+        media_width_mm: { type: integer }
+        media_length_mm: { type: integer }
+        mode: { type: integer }
+        error1: { type: integer }
+        error2: { type: integer }
+        printer_in_use: { type: boolean }
+        has_error: { type: boolean }
+        errors:
+          type: array
+          items: { type: string, enum: [no_media, end_of_media, wrong_media, communication_error, cover_open, cannot_feed, system_error] }
+        raw: { type: string, description: 32 bytes as hex }
     Message:
       type: object
       properties:
@@ -133,11 +184,14 @@ components:
       type: object
       properties:
         ok: { type: boolean }
+        result: { type: string, enum: [printed, sent_no_confirmation, printer_error, transfer_failed] }
+        printer_reported_completed: { type: boolean }
+        printer_reported_error: { type: boolean }
+        printer_messages: { type: array, items: { $ref: '#/components/schemas/BrotherStatus' } }
         bytes_expected: { type: integer }
         bytes_received: { type: integer }
         bytes_acknowledged_by_usb: { type: integer }
         usb_result: { type: string, example: ESP_OK }
-        note: { type: string }
     Status:
       type: object
       properties:

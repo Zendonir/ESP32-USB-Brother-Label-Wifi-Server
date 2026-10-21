@@ -36,7 +36,7 @@ ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
 |---|---|---|
 | 1 | Hardware- und Protokollanalyse | ✅ [Bericht](docs/phase1-analyse.md) – offene Punkte müssen am Gerät gemessen werden |
 | 2 | USB-Diagnose-Firmware | ✅ **am echten TD-2020A getestet** (21.10.2026): VID/PID 0x04F9/0x2055, Printer Class, Bulk IN 0x81 / OUT 0x02 |
-| 3 | Zuverlässige USB-Übertragung eines Brother-Druckauftrags | 🔜 als Nächstes |
+| 3 | Brother-Statusabfrage, Testdruck mit Treiberdatei, sichere Übertragung | 🚧 implementiert (0.3.0-dev), ⏳ Hardwaretest |
 | 4 | WLAN + RAW-TCP 9100 für Windows | 🔜 |
 | 5 | REST-API + zentrale Warteschlange | 🔜 |
 | 6 | Vollständiges Webinterface | 🔜 (Diagnose-UI vorhanden) |
@@ -187,6 +187,21 @@ Setup-WLAN heraus ändern, nicht aus dem Heimnetz.
 Falls gar nichts erkannt wird: Ohne VBUS gibt es keine einzige USB-Logzeile. Mit VBUS, aber
 fehlerhafter Enumeration, erscheinen `ENUM`-Fehlermeldungen der ESP-IDF – bitte mitschicken.
 
+## Phase 3: Status und Testdruck
+
+**Status:** Konsole `brother_status` oder im Webinterface „Status abfragen“. Gezeigt werden Medium
+(Endlos/Etiketten), Breite × Länge, Phase und Fehler (kein Medium, Deckel offen, …).
+
+**Testdruck mit Daten des Originaltreibers:**
+1. Unter Windows den Brother-Treiber für den TD-2020 installieren (Drucker dafür kurz per USB am
+   PC oder direkt Anschluss `FILE:` wählen).
+2. Ein kleines Etikett drucken mit „Ausgabe in Datei umleiten“ bzw. Anschluss `FILE:` → `test.prn`.
+3. Auf der seriellen Konsole `raw_send on` eingeben (gilt bis zum Neustart).
+4. Webinterface → **System** → „Testdruck mit Treiberdatei“ → Datei wählen → „An Drucker senden“.
+   Alternativ: `curl --data-binary @test.prn -H "Content-Type: application/octet-stream" http://<ip>/api/diag/raw`
+5. Die Antwort zeigt `result`: `printed` (Drucker meldet „Druck abgeschlossen“), `printer_error`,
+   `sent_no_confirmation` oder `transfer_failed`, dazu alle Meldungen des Druckers.
+
 ## Fehlerbehebung
 
 ### Neustart-Schleife mit `E BOD: Brownout detector was triggered`
@@ -227,6 +242,8 @@ Enumeration (`ENUM: ...`). Kommt **gar nichts**, sieht der ESP32 keinen Pull-up 
 | `usb` | vollständigen USB-Bericht ausgeben |
 | `usb_refresh` | IEEE-1284-ID und Port-Status neu abfragen, Bericht ausgeben |
 | `usb_read` | einmal vom Bulk-IN-Endpoint lesen (1 s), Hexdump |
+| `brother_status` | Brother-Statusabfrage (`ESC i S`): Medium, Breite, Fehler, Phase |
+| `raw_send [on\|off]` | Testdruck-Upload (`/api/diag/raw`) bis zum Neustart freischalten |
 | `status` | Drucker, WLAN, Speicher |
 | `wifi_set <ssid> [passwort]` | WLAN speichern und verbinden |
 | `wifi_start` | WLAN und Webserver starten (nach Sicherheitsmodus) |
@@ -249,9 +266,10 @@ Webinterface: `http://brother-td2020.local/` bzw. `http://192.168.4.1/` (Setup-W
 | GET | `/api/usb/text` | USB-Bericht (Text, wie Konsole) |
 | POST | `/api/usb/refresh` | IEEE-1284-ID/Port-Status neu abfragen |
 | GET | `/api/log` | Log |
+| GET | `/api/printer/status` | Brother-Status live abfragen (`?cached=1`: letzter Stand ohne Druckerzugriff) |
 | POST | `/api/wifi` | WLAN setzen – **nur über Setup-WLAN** |
 | POST | `/api/system/restart` | Neustart – **nur über Setup-WLAN** |
-| POST | `/api/diag/raw` | nur wenn in menuconfig aktiviert: Rohdaten unverändert an den Drucker |
+| POST | `/api/diag/raw` | Treiberdatei unverändert an den Drucker; nur nach `raw_send on` auf der Konsole |
 
 Beispiele:
 

@@ -2,7 +2,7 @@
 
 const I18N = {
   en: {
-    title: 'Brother TD-2020A Print Server', phase: 'Phase 2 · USB diagnostics',
+    title: 'Brother TD-2020A Print Server', phase: 'Phase 3 · Status & test print',
     tab_dash: 'Overview', tab_usb: 'USB diagnostics', tab_wifi: 'Wi-Fi', tab_log: 'Log', tab_sys: 'System',
     conn_err: 'No connection to the device.', printer: 'Printer', product: 'Product', usb_class: 'USB class',
     connects: 'Connects', last_error: 'Last error', wifi: 'Wi-Fi', ip: 'IP address', hostname: 'Hostname',
@@ -26,9 +26,17 @@ const I18N = {
     active: 'active', inactive: 'inactive', saved: 'Saved. The device is connecting – watch the serial console ' +
       'or your router for the new IP address.', restarting: 'Restarting…', confirm_restart: 'Restart the device?',
     storage_note: 'Interface %d is Mass Storage – the printer may be in a storage/editor mode.',
+    label_status: 'Labels & printer status', query_status: 'Query status', st_ok: 'Ready',
+    st_error: 'Error', st_none: 'Not queried yet', media: 'Media', size: 'Size', errors: 'Errors',
+    phase: 'Phase', model: 'Model', age: 'Age', in_use: 'printer in use',
+    m_none: 'no media', m_cont: 'continuous tape', m_die: 'die-cut labels',
+    raw_title: 'Test print with driver file (.prn)',
+    raw_help: 'A file created by the original Brother driver with "print to file". Sent unchanged. Enable on the serial console with raw_send on.',
+    raw_send: 'Send to printer', raw_on: 'Enabled until restart.', raw_off: 'Disabled – run "raw_send on" on the serial console.',
+    sending: 'Sending…',
   },
   de: {
-    title: 'Brother TD-2020A Printserver', phase: 'Phase 2 · USB-Diagnose',
+    title: 'Brother TD-2020A Printserver', phase: 'Phase 3 · Status & Testdruck',
     tab_dash: 'Übersicht', tab_usb: 'USB-Diagnose', tab_wifi: 'WLAN', tab_log: 'Log', tab_sys: 'System',
     conn_err: 'Keine Verbindung zum Gerät.', printer: 'Drucker', product: 'Produkt', usb_class: 'USB-Klasse',
     connects: 'Verbindungen', last_error: 'Letzter Fehler', wifi: 'WLAN', ip: 'IP-Adresse', hostname: 'Hostname',
@@ -54,6 +62,14 @@ const I18N = {
     active: 'aktiv', inactive: 'inaktiv', saved: 'Gespeichert. Das Gerät verbindet sich – die neue IP-Adresse ' +
       'steht in der seriellen Konsole bzw. im Router.', restarting: 'Neustart…', confirm_restart: 'Gerät neu starten?',
     storage_note: 'Interface %d ist Massenspeicher – der Drucker ist evtl. in einem Speicher-/Editor-Modus.',
+    label_status: 'Etiketten & Druckerstatus', query_status: 'Status abfragen', st_ok: 'Bereit',
+    st_error: 'Fehler', st_none: 'Noch nicht abgefragt', media: 'Medium', size: 'Größe', errors: 'Fehler',
+    phase: 'Phase', model: 'Modell', age: 'Alter', in_use: 'Drucker belegt',
+    m_none: 'kein Medium', m_cont: 'Endlosband', m_die: 'Etiketten (gestanzt)',
+    raw_title: 'Testdruck mit Treiberdatei (.prn)',
+    raw_help: 'Datei, die der originale Brother-Treiber mit „Ausgabe in Datei“ erzeugt hat. Wird unverändert gesendet. Freischalten auf der seriellen Konsole mit raw_send on.',
+    raw_send: 'An Drucker senden', raw_on: 'Freigeschaltet bis zum Neustart.', raw_off: 'Gesperrt – auf der seriellen Konsole „raw_send on“ eingeben.',
+    sending: 'Wird gesendet…',
   },
 };
 
@@ -127,7 +143,36 @@ function renderStatus(s) {
   $('wifi-locked').classList.toggle('hidden', w.via_setup_ap);
   $('wifi-form').querySelectorAll('input,button').forEach((e) => { e.disabled = !w.via_setup_ap; });
   $('restart').disabled = !w.via_setup_ap;
-  $('api-raw').classList.toggle('hidden', !s.features.raw_send);
+  $('api-raw').classList.toggle('hidden', !s.features.raw_send_available);
+  $('raw-card').classList.toggle('hidden', !s.features.raw_send_available);
+  $('raw-state').textContent = s.features.raw_send ? t('raw_on') : t('raw_off');
+  $('raw-form').querySelectorAll('input,button').forEach((e) => { e.disabled = !s.features.raw_send; });
+  renderBrother(s.brother);
+}
+
+const ERR_TEXT = {
+  de: { no_media: 'kein Medium', end_of_media: 'Medienende', wrong_media: 'falsches Medium',
+    communication_error: 'Kommunikationsfehler', cover_open: 'Deckel offen', cannot_feed: 'Transport nicht möglich',
+    system_error: 'Systemfehler' },
+  en: { no_media: 'no media', end_of_media: 'end of media', wrong_media: 'wrong media',
+    communication_error: 'communication error', cover_open: 'cover open', cannot_feed: 'cannot feed',
+    system_error: 'system error' },
+};
+
+function renderBrother(b) {
+  const el = $('b-state');
+  if (!b) { el.textContent = t('st_none'); el.className = 'big'; dl($('b-details'), []); return; }
+  const st = b.status;
+  const errs = st.errors.map((e) => ERR_TEXT[lang][e] || e);
+  el.textContent = st.has_error ? `${t('st_error')}: ${errs.join(', ')}` : t('st_ok');
+  el.className = 'big ' + (st.has_error ? 'err' : 'ok');
+  const media = { none: t('m_none'), continuous_tape: t('m_cont'), die_cut_labels: t('m_die') }[st.media_type] || st.media_type;
+  const size = st.media_type === 'none' ? '–' : st.media_length_mm ? `${st.media_width_mm} × ${st.media_length_mm} mm` : `${st.media_width_mm} mm`;
+  dl($('b-details'), [
+    [t('model'), esc(st.model)], [t('media'), esc(media)], [t('size'), esc(size)],
+    [t('phase'), esc(st.phase) + (st.printer_in_use ? ` (${t('in_use')})` : '')],
+    [t('age'), `${Math.round(b.age_ms / 1000)} s`],
+  ]);
 }
 
 function renderUsb(u) {
@@ -234,6 +279,22 @@ $('usb-refresh').addEventListener('click', async () => {
   catch (e) { alert(e.message); }
 });
 $('log-refresh').addEventListener('click', loadLog);
+$('bq').addEventListener('click', async () => {
+  try { const r = await api('/api/printer/status'); renderBrother(r.printer); }
+  catch (e) { alert(e.message); }
+});
+$('raw-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = $('raw-file').files[0];
+  if (!f) return;
+  const out = $('raw-result');
+  out.classList.remove('hidden');
+  out.textContent = t('sending');
+  try {
+    const r = await fetch('/api/diag/raw', { method: 'POST', body: f, headers: { 'Content-Type': 'application/octet-stream' } });
+    out.textContent = JSON.stringify(await r.json(), null, 2);
+  } catch (e) { out.textContent = e.message; }
+});
 $('wifi-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const body = new URLSearchParams(new FormData(ev.target));

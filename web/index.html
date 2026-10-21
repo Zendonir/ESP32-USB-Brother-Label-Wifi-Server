@@ -10,7 +10,7 @@
 <header>
   <div class="brand">
     <h1 data-i18n="title">Brother TD-2020A Printserver</h1>
-    <span class="badge" data-i18n="phase">Phase 2 · USB-Diagnose</span>
+    <span class="badge" data-i18n="phase">Phase 3 · Status &amp; Testdruck</span>
   </div>
   <nav>
     <button class="tab active" data-tab="dash" data-i18n="tab_dash">Übersicht</button>
@@ -61,6 +61,14 @@
           <dt>PSRAM</dt><dd id="d-psram">–</dd>
         </dl>
       </div>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <h2 data-i18n="label_status" style="margin:0">Etiketten &amp; Druckerstatus</h2>
+        <button id="bq" class="secondary" data-i18n="query_status">Status abfragen</button>
+      </div>
+      <div class="big" id="b-state">–</div>
+      <dl id="b-details"></dl>
     </div>
     <p class="hint" data-i18n="phase_hint">Diese Firmware ist der Diagnosestand (Phase 2): Sie erkennt den Drucker und liest
       alle USB-Deskriptoren aus. Druckfunktionen (Port 9100, REST-Druck, Warteschlange) folgen in den nächsten Phasen.</p>
@@ -134,12 +142,24 @@
       <p class="hint" data-i18n="restart_hint">Neustart ist in dieser Phase nur über das Setup-WLAN oder die serielle Konsole erlaubt.</p>
       <button id="restart" class="danger" data-i18n="restart">Neustart</button>
       <p id="sys-msg" class="hint"></p>
+      <div id="raw-card" class="hidden">
+        <h3 data-i18n="raw_title">Testdruck mit Treiberdatei (.prn)</h3>
+        <p class="hint" data-i18n="raw_help">Datei, die der originale Brother-Treiber mit „Ausgabe in Datei“ erzeugt hat.
+          Wird unverändert an den Drucker gesendet. Freischalten auf der seriellen Konsole mit <code>raw_send on</code>.</p>
+        <p id="raw-state" class="hint"></p>
+        <form id="raw-form">
+          <input type="file" id="raw-file" required>
+          <button type="submit" data-i18n="raw_send">An Drucker senden</button>
+        </form>
+        <pre id="raw-result" class="hidden"></pre>
+      </div>
       <h3>API</h3>
       <ul class="api">
         <li><code>GET /api/health</code></li>
         <li><code>GET /api/status</code></li>
         <li><code>GET /api/usb</code> · <code>GET /api/usb/text</code> · <code>POST /api/usb/refresh</code></li>
         <li><code>GET /api/log</code></li>
+        <li><code>GET /api/printer/status</code> · <code>?cached=1</code></li>
         <li><code>POST /api/wifi</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
         <li><code>POST /api/system/restart</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
         <li id="api-raw" class="hidden"><code>POST /api/diag/raw</code> <span data-i18n="raw_hint">(Entwicklungsfunktion, aktiviert)</span></li>

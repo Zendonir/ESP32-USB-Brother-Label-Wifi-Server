@@ -72,6 +72,15 @@ esp_err_t usb_printer_write(const uint8_t *data, size_t len, uint32_t timeout_ms
 /* Reads from the bulk IN endpoint if present. *got receives the byte count. */
 esp_err_t usb_printer_read(uint8_t *buf, size_t len, size_t *got, uint32_t timeout_ms);
 
+/*
+ * Exclusive access for a complete print job or command sequence (e.g. status
+ * request + reply). Everything that talks to the printer through more than one
+ * usb_printer_write()/read() call must hold this so that sequences are never
+ * interleaved. Returns ESP_ERR_TIMEOUT if another job is still running.
+ */
+esp_err_t usb_printer_job_begin(uint32_t timeout_ms);
+void usb_printer_job_end(void);
+
 #ifdef __cplusplus
 }
 #endif

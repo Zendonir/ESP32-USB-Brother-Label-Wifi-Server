@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/socket.h>
 
+#include "brother_printer.h"
 #include "diag_log.h"
 #include "esp_app_desc.h"
 #include "esp_heap_caps.h"
@@ -33,6 +34,26 @@ extern const uint8_t style_css_end[] asm("_binary_style_css_end");
 
 /* esp_http_server runs all handlers in one task, so one response buffer is enough. */
 static char *s_resp;
+/* /api/diag/raw is compiled in but only accepted after 'raw_send on' on the serial console. */
+static volatile bool s_raw_send_enabled;
+
+void web_server_set_raw_send(bool enable)
+{
+    s_raw_send_enabled = enable;
+    ESP_LOGW(TAG, "raw send endpoint %s", enable ? "ENABLED (until restart)" : "disabled");
+}
+
+bool web_server_raw_send_enabled(void)
+{
+    return s_raw_send_enabled;
+}
+
+static void json_brother_status(strbuf_t *sb, const brother_status_t *st, int64_t age_ms)
+{
+    sb_printf(sb, "{\"age_ms\":%lld,\"status\":", (long long)age_ms);
+    brother_status_format_json(st, sb);
+    sb_putc(sb, '}');
+}
 
 /* ------------------------------------------------------------------------- */
 /* Helpers                                                                   */
@@ -215,7 +236,7 @@ static esp_err_t h_status(httpd_req_t *req)
     sb_json_str(&sb, app->version);
     sb_puts(&sb, ",\"idf\":");
     sb_json_str(&sb, app->idf_ver);
-    sb_printf(&sb, ",\"build\":\"%s %s\",\"phase\":\"2-usb-diagnostics\"},", app->date, app->time);
+    sb_printf(&sb, ",\"build\":\"%s %s\",\"phase\":\"3-status-testprint\"},", app->date, app->time);
 
     sb_printf(&sb, "\"uptime_s\":%lld,\"reset_reason\":\"%s\",", esp_timer_get_time() / 1000000,
               reset_reason_name(esp_reset_reason()));
@@ -254,10 +275,21 @@ static esp_err_t h_status(httpd_req_t *req)
     sb_json_str(&sb, p.last_error);
     sb_puts(&sb, "},");
 
+    brother_status_t bst;
+    int64_t age_ms = 0;
+    sb_puts(&sb, "\"brother\":");
+    if (brother_get_last_status(&bst, &age_ms)) {
+        json_brother_status(&sb, &bst, age_ms);
+    } else {
+        sb_puts(&sb, "null");
+    }
+    sb_putc(&sb, ',');
+
 #if CONFIG_DIAG_ENABLE_RAW_SEND
-    sb_printf(&sb, "\"features\":{\"raw_send\":true,\"raw_send_max_bytes\":%d}}", CONFIG_DIAG_RAW_SEND_MAX_BYTES);
+    sb_printf(&sb, "\"features\":{\"raw_send\":%s,\"raw_send_available\":true,\"raw_send_max_bytes\":%d}}",
+              s_raw_send_enabled ? "true" : "false", CONFIG_DIAG_RAW_SEND_MAX_BYTES);
 #else
-    sb_puts(&sb, "\"features\":{\"raw_send\":false}}");
+    sb_puts(&sb, "\"features\":{\"raw_send\":false,\"raw_send_available\":false}}");
 #endif
     return send_json(req, &sb);
 }
@@ -287,6 +319,38 @@ static esp_err_t h_usb_refresh(httpd_req_t *req)
         return send_json_msg(req, "409 Conflict", false, "no USB device connected");
     }
     return h_usb(req);
+}
+
+/* GET /api/printer/status        -> runs the Brother status request (ESC i S)
+ * GET /api/printer/status?cached=1 -> last status received, no printer access */
+static esp_err_t h_printer_status(httpd_req_t *req)
+{
+    char q[32] = "";
+    bool cached = false;
+    if (httpd_req_get_url_query_str(req, q, sizeof(q)) == ESP_OK) {
+        char v[4];
+        cached = httpd_query_key_value(q, "cached", v, sizeof(v)) == ESP_OK && v[0] == '1';
+    }
+    brother_status_t st;
+    int64_t age_ms = 0;
+    if (!cached) {
+        esp_err_t err = brother_query_status(&st);
+        if (err == ESP_ERR_INVALID_STATE) {
+            return send_json_msg(req, "409 Conflict", false, "printer not connected or busy with a job");
+        }
+        if (err != ESP_OK) {
+            return send_json_msg(req, "504 Gateway Timeout", false, "printer did not answer the status request");
+        }
+    } else if (!brother_get_last_status(&st, &age_ms)) {
+        return send_json_msg(req, "404 Not Found", false, "no status received yet");
+    }
+    strbuf_t sb;
+    sb_init(&sb, s_resp, RESP_BUF_SIZE);
+    sb_puts(&sb, "{\"ok\":true,");
+    sb_json_key(&sb, "printer");
+    json_brother_status(&sb, &st, age_ms);
+    sb_putc(&sb, '}');
+    return send_json(req, &sb);
 }
 
 static esp_err_t h_log(httpd_req_t *req)
@@ -345,13 +409,35 @@ static esp_err_t h_restart(httpd_req_t *req)
 }
 
 #if CONFIG_DIAG_ENABLE_RAW_SEND
+/* Discards the rest of a request body so the connection stays usable for the response. */
+static void drain_body(httpd_req_t *req, size_t remaining, uint8_t *buf, size_t size)
+{
+    while (remaining > 0) {
+        int r = httpd_req_recv(req, (char *)buf, remaining < size ? remaining : size);
+        if (r == HTTPD_SOCK_ERR_TIMEOUT) {
+            continue;
+        }
+        if (r <= 0) {
+            return;
+        }
+        remaining -= (size_t)r;
+    }
+}
+
 /*
- * Forwards the request body unchanged to the printer's bulk OUT endpoint.
- * Development aid for phase 3 (e.g. a .prn file produced by the original
- * Brother driver via "print to file"). Bypasses any queue - one job at a time.
+ * Forwards the request body unchanged to the printer's bulk OUT endpoint, then
+ * reports what the printer itself answers on bulk IN (phase change, "printing
+ * completed", errors). Development aid for phase 3: a .prn file produced by the
+ * ORIGINAL Brother driver ("print to file"). Holds the job lock for the whole
+ * transfer, so status requests cannot interleave. An incomplete job is aborted
+ * with invalidate + initialize as the Raster Command Reference describes.
  */
 static esp_err_t h_diag_raw(httpd_req_t *req)
 {
+    if (!s_raw_send_enabled) {
+        return send_json_msg(req, "403 Forbidden", false,
+                             "raw send is disabled; enable it on the serial console with 'raw_send on'");
+    }
     if (req->content_len == 0 || req->content_len > CONFIG_DIAG_RAW_SEND_MAX_BYTES) {
         return send_json_msg(req, "413 Payload Too Large", false, "empty body or larger than DIAG_RAW_SEND_MAX_BYTES");
     }
@@ -359,6 +445,9 @@ static esp_err_t h_diag_raw(httpd_req_t *req)
     usb_printer_get_summary(&p);
     if (!p.ready) {
         return send_json_msg(req, "409 Conflict", false, "printer not ready");
+    }
+    if (usb_printer_job_begin(0) != ESP_OK) {
+        return send_json_msg(req, "409 Conflict", false, "printer busy with another job");
     }
     ESP_LOGI(TAG, "raw send: %u bytes", (unsigned)req->content_len);
     static uint8_t chunk[4096];
@@ -384,23 +473,49 @@ static esp_err_t h_diag_raw(httpd_req_t *req)
             break;
         }
     }
+    bool complete = !net_err && usb_err == ESP_OK && acked == req->content_len;
+
+    brother_status_log_t log;
+    memset(&log, 0, sizeof(log));
+    if (complete) {
+        /* The printer reports phase changes and "printing completed" by itself. */
+        brother_collect_statuses(30000, 10000, &log);
+    } else {
+        ESP_LOGE(TAG, "raw send INCOMPLETE (%u of %u bytes, %s) - aborting job on the printer",
+                 (unsigned)acked, (unsigned)req->content_len, net_err ? "connection lost" : esp_err_to_name(usb_err));
+        brother_cancel_job();
+    }
+    usb_printer_job_end();
+
     if (net_err) {
-        ESP_LOGE(TAG, "raw send: connection lost after %u of %u bytes; printer received an INCOMPLETE job",
-                 (unsigned)received, (unsigned)req->content_len);
         return ESP_FAIL;
     }
+    drain_body(req, req->content_len - received, chunk, sizeof(chunk));
+
     strbuf_t sb;
     sb_init(&sb, s_resp, RESP_BUF_SIZE);
-    bool ok = usb_err == ESP_OK && acked == req->content_len;
-    sb_printf(&sb, "{\"ok\":%s,\"bytes_expected\":%u,\"bytes_received\":%u,\"bytes_acknowledged_by_usb\":%u,"
-              "\"usb_result\":\"%s\",\"note\":\"USB acknowledgement does not confirm a physical print\"}",
-              ok ? "true" : "false", (unsigned)req->content_len, (unsigned)received, (unsigned)acked,
-              esp_err_to_name(usb_err));
-    if (!ok) {
+    const char *result = !complete ? "transfer_failed"
+                         : log.error ? "printer_error"
+                         : log.printing_completed ? "printed"
+                         : "sent_no_confirmation";
+    sb_printf(&sb, "{\"ok\":%s,\"result\":\"%s\",\"bytes_expected\":%u,\"bytes_received\":%u,"
+              "\"bytes_acknowledged_by_usb\":%u,\"usb_result\":\"%s\",\"printer_reported_completed\":%s,"
+              "\"printer_reported_error\":%s,\"printer_messages\":[",
+              complete && !log.error ? "true" : "false", result, (unsigned)req->content_len, (unsigned)received,
+              (unsigned)acked, esp_err_to_name(usb_err), log.printing_completed ? "true" : "false",
+              log.error ? "true" : "false");
+    for (size_t i = 0; i < log.count; i++) {
+        if (i) {
+            sb_putc(&sb, ',');
+        }
+        brother_status_format_json(&log.items[i], &sb);
+    }
+    sb_puts(&sb, "]}");
+    if (!complete || log.error) {
         httpd_resp_set_status(req, "502 Bad Gateway");
     }
-    ESP_LOGI(TAG, "raw send finished: %u/%u bytes acknowledged (%s)", (unsigned)acked,
-             (unsigned)req->content_len, esp_err_to_name(usb_err));
+    ESP_LOGI(TAG, "raw send finished: %s (%u/%u bytes acknowledged)", result, (unsigned)acked,
+             (unsigned)req->content_len);
     return send_json(req, &sb);
 }
 #endif
@@ -442,6 +557,7 @@ esp_err_t web_server_start(void)
         { .uri = "/api/usb/text",    .method = HTTP_GET,  .handler = h_usb_text },
         { .uri = "/api/usb/refresh", .method = HTTP_POST, .handler = h_usb_refresh },
         { .uri = "/api/log",         .method = HTTP_GET,  .handler = h_log },
+        { .uri = "/api/printer/status", .method = HTTP_GET, .handler = h_printer_status },
         { .uri = "/api/wifi",        .method = HTTP_POST, .handler = h_wifi_set },
         { .uri = "/api/system/restart", .method = HTTP_POST, .handler = h_restart },
 #if CONFIG_DIAG_ENABLE_RAW_SEND

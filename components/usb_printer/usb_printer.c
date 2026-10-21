@@ -44,6 +44,9 @@ static QueueHandle_t s_evt_q;
 static SemaphoreHandle_t s_state_lock;
 /* s_io_lock serializes all transfers (EP0 and bulk) to the device. */
 static SemaphoreHandle_t s_io_lock;
+/* s_job_lock is held for a whole print job or command sequence so that nothing else
+ * is interleaved with it on the printer (see usb_printer_job_begin()). */
+static SemaphoreHandle_t s_job_lock;
 
 static usb_device_handle_t s_dev;
 static volatile bool s_dev_gone;
@@ -517,13 +520,14 @@ esp_err_t usb_printer_start(void)
     s_out_done = xSemaphoreCreateBinary();
     s_in_done = xSemaphoreCreateBinary();
     s_print_lock = xSemaphoreCreateMutex();
+    s_job_lock = xSemaphoreCreateMutex();
     s_evt_q = xQueueCreate(8, sizeof(mgr_evt_t));
     s_print_buf = heap_caps_malloc(REPORT_TEXT_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!s_print_buf) {
         s_print_buf = malloc(REPORT_TEXT_SIZE);
     }
     ESP_RETURN_ON_FALSE(s_state_lock && s_io_lock && s_ctrl_done && s_out_done && s_in_done && s_evt_q && s_print_buf &&
-                        s_print_lock,
+                        s_print_lock && s_job_lock,
                         ESP_ERR_NO_MEM, TAG, "alloc");
 
     const usb_host_config_t host_cfg = {
@@ -623,11 +627,13 @@ esp_err_t usb_printer_get_port_status(uint8_t *status)
 }
 
 /*
- * Cancels the transfer in flight on `ep` and resynchronises host and device:
- * host pipe halt/flush/clear plus a standard CLEAR_FEATURE(ENDPOINT_HALT) to the
- * device, which resets the data toggle on both sides. Caller holds s_io_lock.
+ * Cancels the transfer in flight on `ep` (host side only: halt, flush, clear).
+ * No CLEAR_FEATURE is sent: it would reset the device's data toggle while the
+ * host pipe keeps its own, and the next packet would be dropped as a duplicate.
+ * A timeout means the device NAKed, so both toggles are still in sync.
+ * Caller holds s_io_lock.
  */
-static void cancel_and_recover(uint8_t ep, SemaphoreHandle_t done)
+static void cancel_transfer(uint8_t ep, SemaphoreHandle_t done)
 {
     if (usb_host_endpoint_halt(s_dev, ep) == ESP_OK) {
         usb_host_endpoint_flush(s_dev, ep);
@@ -636,11 +642,35 @@ static void cancel_and_recover(uint8_t ep, SemaphoreHandle_t done)
         ESP_LOGE(TAG, "transfer on EP 0x%02x did not return after cancel", ep);
     }
     usb_host_endpoint_clear(s_dev, ep);
-    if (!s_dev_gone) {
-        esp_err_t err = clear_endpoint_halt(ep);
+}
+
+/*
+ * After a STALL both sides must restart the endpoint with DATA0. The device does
+ * so on CLEAR_FEATURE(ENDPOINT_HALT); the host only when the pipe is re-created,
+ * which releasing and re-claiming the interface does. Caller holds s_io_lock.
+ */
+static void recover_after_stall(uint8_t ep)
+{
+    if (s_dev_gone || !s_claimed) {
+        return;
+    }
+    ESP_LOGW(TAG, "endpoint 0x%02x stalled, resetting it", ep);
+    usb_host_endpoint_clear(s_dev, ep);
+    esp_err_t err = usb_host_interface_release(s_client, s_dev, s_claimed_if);
+    if (err == ESP_OK) {
+        err = clear_endpoint_halt(ep);
         if (err != ESP_OK) {
             ESP_LOGW(TAG, "CLEAR_FEATURE(ENDPOINT_HALT) 0x%02x: %s", ep, esp_err_to_name(err));
         }
+        err = usb_host_interface_claim(s_client, s_dev, s_claimed_if, 0);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "endpoint reset failed (%s), unplug/replug the printer", esp_err_to_name(err));
+        s_claimed = false;
+        xSemaphoreTake(s_state_lock, portMAX_DELAY);
+        s_summary.ready = false;
+        s_report.claimed = false;
+        xSemaphoreGive(s_state_lock);
     }
 }
 
@@ -688,7 +718,7 @@ esp_err_t usb_printer_write(const uint8_t *data, size_t len, uint32_t timeout_ms
         if (xSemaphoreTake(s_out_done, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
             ESP_LOGE(TAG, "bulk OUT timeout after %lu ms (%u of %u bytes sent)", (unsigned long)timeout_ms,
                      (unsigned)done, (unsigned)len);
-            cancel_and_recover(ep, s_out_done);
+            cancel_transfer(ep, s_out_done);
             if (s_out_xfer->actual_num_bytes > 0) {
                 done += (size_t)s_out_xfer->actual_num_bytes;
             }
@@ -701,9 +731,8 @@ esp_err_t usb_printer_write(const uint8_t *data, size_t len, uint32_t timeout_ms
         if (s_out_xfer->status != USB_TRANSFER_STATUS_COMPLETED) {
             ESP_LOGE(TAG, "bulk OUT failed: %s", xfer_status_name(s_out_xfer->status));
             err = xfer_status_to_err(s_out_xfer->status);
-            if (s_out_xfer->status == USB_TRANSFER_STATUS_STALL && !s_dev_gone) {
-                usb_host_endpoint_clear(s_dev, ep);
-                clear_endpoint_halt(ep);
+            if (s_out_xfer->status == USB_TRANSFER_STATUS_STALL) {
+                recover_after_stall(ep);
             }
             break;
         }
@@ -757,10 +786,13 @@ esp_err_t usb_printer_read(uint8_t *buf, size_t len, size_t *got, uint32_t timeo
     if (err == ESP_OK) {
         if (xSemaphoreTake(s_in_done, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
             /* No data: normal for many printers. Cancel the pending IN transfer. */
-            cancel_and_recover(ep, s_in_done);
+            cancel_transfer(ep, s_in_done);
             err = ESP_ERR_TIMEOUT;
         } else if (s_in_xfer->status != USB_TRANSFER_STATUS_COMPLETED) {
             err = xfer_status_to_err(s_in_xfer->status);
+            if (s_in_xfer->status == USB_TRANSFER_STATUS_STALL) {
+                recover_after_stall(ep);
+            }
         }
         int actual = s_in_xfer->actual_num_bytes;
         if (actual > 0) {
@@ -774,4 +806,14 @@ esp_err_t usb_printer_read(uint8_t *buf, size_t len, size_t *got, uint32_t timeo
     }
     xSemaphoreGive(s_io_lock);
     return err;
+}
+
+esp_err_t usb_printer_job_begin(uint32_t timeout_ms)
+{
+    return xSemaphoreTake(s_job_lock, pdMS_TO_TICKS(timeout_ms)) == pdTRUE ? ESP_OK : ESP_ERR_TIMEOUT;
+}
+
+void usb_printer_job_end(void)
+{
+    xSemaphoreGive(s_job_lock);
 }

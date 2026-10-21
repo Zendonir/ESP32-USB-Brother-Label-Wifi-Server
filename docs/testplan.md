@@ -48,6 +48,18 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 | C7 | BOOT-Taste 5 s halten | WLAN-Daten gelöscht, Neustart im Setup-Modus | ⏳ |
 | C8 | Log im Web | `/api/log` zeigt Logzeilen, **kein** Passwort | ⏳ |
 
+## P3. Phase 3 – Brother-Status und Testdruck (Firmware ≥ 0.3.0)
+
+| ID | Test | Durchführung | Erwartet | Status |
+|---|---|---|---|---|
+| P3-1 | Statusabfrage | Konsole `brother_status` bzw. Dashboard „Status abfragen“ | Modell TD-2020, Medientyp/-breite passend zur Rolle, Fehler „none“ | ⏳ |
+| P3-2 | Deckel offen | Deckel öffnen, `brother_status` | Fehler „Cover open“ | ⏳ |
+| P3-3 | Ohne Rolle | Rolle entnehmen, `brother_status` | Fehler „No media“, Medium „none“ | ⏳ |
+| P3-4 | Testdruck | `.prn` des Originaltreibers erzeugen, `raw_send on`, Datei im Reiter System senden | Etikett wird gedruckt; Antwort `result: printed` | ⏳ |
+| P3-5 | Testdruck mit offenem Deckel | wie P3-4 bei offenem Deckel | `result: printer_error`, kein Hängen; danach druckt P3-4 wieder | ⏳ |
+| P3-6 | Abbruch | während des Uploads Browser/WLAN trennen | Log `raw send INCOMPLETE … aborting job`, Drucker druckt nichts Halbes bzw. bricht ab | ⏳ |
+| P3-7 | Sperre | `raw_send off` (oder Neustart), Upload versuchen | `403` | ⏳ |
+
 ## D. Spätere Phasen (Gesamtplan)
 
 | Prompt-Punkt | Test | Phase |
@@ -62,7 +74,7 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 | 14 | Speicherverbrauch über Dauertest (`internal_min_free`) | 8 🔜 |
 | 15 | Verschiedene Etikettenformate | 3/8 🔜 |
 
-### Optionaler Vorab-Test für Phase 3 (nur mit `CONFIG_DIAG_ENABLE_RAW_SEND=y`)
+### Testdruck mit Treiberdatei (ab 0.3.0: auf der Konsole `raw_send on`, siehe P3-4)
 
 1. Unter Windows den Original-Brother-Treiber installieren, Drucker temporär per USB am PC.
 2. Etikett drucken mit „Ausgabe in Datei umleiten“ (oder in den Druckereigenschaften den Anschluss `FILE:` wählen) → `test.prn`.

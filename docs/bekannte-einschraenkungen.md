@@ -10,12 +10,12 @@ Trennen/Wiederverbinden funktionieren (Details im [Testplan](testplan.md)).
 ## Funktionsumfang dieser Phase
 
 - **Kein Druck über Port 9100, keine REST-Druck-API, keine Warteschlange.** Folgt in Phase 4/5.
-- Es werden **keine Brother-Befehle** gesendet (keine Statusabfrage `ESC i S`, keine
-  Initialisierung, keine Templates). Die Befehle sind inzwischen dokumentiert (siehe
-  [phase1-analyse.md](phase1-analyse.md#4-drucker-brother-td-2020a)), werden aber erst in
-  Phase 3 eingebaut, wenn die USB-Verbindung am Gerät bestätigt ist.
-- `usb_printer_write()` (Bulk OUT mit Timeout/Recovery) ist implementiert, aber nur über die
-  optionale Entwicklungsfunktion `/api/diag/raw` erreichbar (standardmäßig **aus**).
+- Brother-Befehle (ab 0.3.0): nur die dokumentierte Statusabfrage (Invalidate, `ESC @`, `ESC i S`)
+  und der Abbruch eines unvollständigen Auftrags (Invalidate + `ESC @`). Keine eigenen Raster- oder
+  Template-Daten.
+- Testdruck nur über `/api/diag/raw` mit einer Datei des Originaltreibers; ohne Authentifizierung,
+  daher nach jedem Neustart gesperrt und nur über die serielle Konsole (`raw_send on`) freischaltbar.
+  Während des Testdrucks blockiert der Webserver bis zu 30 s (Warten auf die Druckermeldungen).
 - Ein herstellerspezifisches Interface (Klasse 0xFF) wird nur angezeigt, nicht belegt,
   solange `CONFIG_USB_PRINTER_ALLOW_VENDOR_INTERFACE` aus ist.
 - Nur ein USB-Gerät, direkt angeschlossen (keine Hubs).
