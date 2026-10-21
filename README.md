@@ -217,6 +217,8 @@ Enumeration (`ENUM: ...`). Kommt **gar nichts**, sieht der ESP32 keinen Pull-up 
    - **D− (GPIO19)**: ca. 0 V
    - D− hoch und D+ ≈ 0 V → **D+ und D− vertauscht**
    - beide ≈ 0 V → Drucker sieht kein VBUS oder ist nicht im USB-Modus
+4. Ohne Messgerät: die beiden Datenadern an **GPIO19/GPIO20 probeweise tauschen** – die Aderfarben
+   sind nicht genormt, ein Vertauschen ist der häufigste Fehler (ohne Erkennung, ohne Fehlermeldung).
 
 ## Serielle Konsole
 
