@@ -121,7 +121,7 @@ void app_main(void)
     diag_log_init(CONFIG_APP_LOG_BUFFER_SIZE);
 
     const esp_app_desc_t *app = esp_app_get_description();
-    ESP_LOGI(TAG, "%s %s (ESP-IDF %s) - phase 2 USB diagnostic firmware", app->project_name, app->version,
+    ESP_LOGI(TAG, "%s %s (ESP-IDF %s) - phase 3: USB transport, Brother status, test print", app->project_name, app->version,
              app->idf_ver);
 
     ESP_ERROR_CHECK(cfg_init());

@@ -1,11 +1,13 @@
-# Bekannte Einschränkungen (Stand Phase 2)
+# Bekannte Einschränkungen (Stand Phase 3)
 
 ## Stand der Hardware-Tests
 
 Am 21.10.2026 auf einem ESP32-S3-DevKitC-1 (N16R8) mit einem Brother TD-2020A getestet:
 Start, WLAN, Webinterface, USB-Erkennung, Deskriptorbericht, Printer-Class-Anfragen sowie
 Trennen/Wiederverbinden funktionieren (Details im [Testplan](testplan.md)).
-**Noch nicht getestet:** Senden von Druckdaten, Bulk-IN-Lesen, Verhalten ohne Papier, Dauerbetrieb.
+Ein Testdruck mit einer Datei des Originaltreibers wurde gedruckt; der Drucker hat über Bulk IN
+„Druck läuft“, „Druck abgeschlossen“ und „empfangsbereit“ gemeldet.
+**Noch nicht getestet:** Verhalten ohne Papier/mit offenem Deckel, große Aufträge, Abbruch, Dauerbetrieb.
 
 ## Funktionsumfang dieser Phase
 

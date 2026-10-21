@@ -36,7 +36,7 @@ ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
 |---|---|---|
 | 1 | Hardware- und Protokollanalyse | ✅ [Bericht](docs/phase1-analyse.md) – offene Punkte müssen am Gerät gemessen werden |
 | 2 | USB-Diagnose-Firmware | ✅ **am echten TD-2020A getestet** (21.10.2026): VID/PID 0x04F9/0x2055, Printer Class, Bulk IN 0x81 / OUT 0x02 |
-| 3 | Brother-Statusabfrage, Testdruck mit Treiberdatei, sichere Übertragung | 🚧 implementiert (0.3.0-dev), ⏳ Hardwaretest |
+| 3 | Brother-Statusabfrage, Testdruck mit Treiberdatei, sichere Übertragung | ✅ **erster Druck über den ESP32** (21.10.2026); Fehlerfälle noch offen |
 | 4 | WLAN + RAW-TCP 9100 für Windows | 🔜 |
 | 5 | REST-API + zentrale Warteschlange | 🔜 |
 | 6 | Vollständiges Webinterface | 🔜 (Diagnose-UI vorhanden) |
