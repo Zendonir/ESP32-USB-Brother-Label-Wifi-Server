@@ -13,7 +13,7 @@ Stand: 20.10.2026. Dieses Dokument trennt strikt zwischen **verifiziert**, **aus
 | USB Printer Class, Bulk IN/OUT | laut Raster-Referenz für die TD-2000-Serie ja; für TD-2020A am Gerät zu bestätigen |
 | Brother-Raster-Befehle | dokumentiert (Raster Command Reference 1.01, s. 4.); TD-2020A dort nicht namentlich genannt |
 | P-touch-Template-Befehle | dokumentiert, **TD-2020A ausdrücklich genannt** (P-touch Template 2.0 Reference 3.08) |
-| VBUS-Versorgung am Heemol-Board | **unbekannt** – muss am Board gemessen werden (s. 3.) |
+| VBUS-Versorgung am Board | **unbekannt** – muss am Board gemessen werden (s. 3.) |
 | Windows-RAW-Druck (Port 9100) | konzeptionell ohne Brother-Befehle möglich (Treiber erzeugt Daten) |
 
 Konsequenz: Phase 2 liefert eine Diagnose-Firmware, die **nichts** über den Drucker voraussetzt
@@ -47,7 +47,7 @@ Relevante Fakten der USB-Host-Library (geprüft in den Headern von v5.5.6):
 - Es gibt keine Hardware-Schaltung von VBUS durch den ESP32-S3; `root_port_unpowered` steuert
   nur den Port-Zustand im Controller, nicht die 5-V-Leitung.
 
-## 3. Board: Heemol ESP32-S3 N16R8 DevKitC-1
+## 3. Board: ESP32-S3-DevKitC-1-Nachbau N16R8 (Binghe)
 
 Ohne Schaltplan der konkreten Platinenrevision werden **keine** Annahmen getroffen.
 Bekannt bzw. plausibel (bitte am Board prüfen):
@@ -61,7 +61,7 @@ Bekannt bzw. plausibel (bitte am Board prüfen):
 - **VBUS am nativen Port**: Beim Originaldesign von Espressif speist VBUS des nativen Ports
   das Board (über eine Diode) – es liefert dann **keine** 5 V nach außen. Viele Nachbauten
   haben eine Lötbrücke (oft mit „USB-OTG“ beschriftet), die 5 V auf den VBUS des nativen
-  Ports legt. **Ob das bei Ihrer Heemol-Revision so ist, ist unbekannt.**
+  Ports legt. **Beim verwendeten Binghe-Board gibt es diese Brücke („USB-OTG“), sie ist im Auslieferungszustand offen (s. usb-verkabelung.md).**
 
 Messung, die vor dem Anschluss des Druckers nötig ist: siehe [usb-verkabelung.md](usb-verkabelung.md).
 

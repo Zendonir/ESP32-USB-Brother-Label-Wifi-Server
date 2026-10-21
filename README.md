@@ -62,7 +62,7 @@ ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
 
 ## Hardware und Verkabelung
 
-- Heemol ESP32-S3 N16R8 DevKitC-1 (16 MB Flash, 8 MB Octal-PSRAM)
+- ESP32-S3-DevKitC-1-Nachbau mit Modul ESP32-S3-WROOM-1-N16R8 (16 MB Flash, 8 MB Octal-PSRAM), getestet wird mit einem Board von Binghe
 - USB-C-OTG-Adapter am **nativen** USB-Port, USB-A-auf-Mini-B-Kabel zum Drucker
 - Stromversorgung und Konsole über den **UART/COM**-USB-C-Port
 
