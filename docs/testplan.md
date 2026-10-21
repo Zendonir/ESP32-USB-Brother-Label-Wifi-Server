@@ -56,7 +56,9 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 | P3-2 | Deckel offen | Deckel öffnen, `brother_status` | Fehler „Cover open“ | ⏳ |
 | P3-3 | Ohne Rolle | Rolle entnehmen, `brother_status` | Fehler „No media“, Medium „none“ | ⏳ |
 | P3-4 | Testdruck | `.prn` des Originaltreibers erzeugen, Datei im Reiter System senden | Etikett wird gedruckt; Antwort `result: printed` | ✅ 4454 Byte (Treiberdatei), Drucker meldet Druck → abgeschlossen → empfangsbereit (21.10.2026) |
-| P3-5 | Testdruck mit offenem Deckel | wie P3-4 bei offenem Deckel | `result: printer_error`, kein Hängen; danach druckt P3-4 wieder | ⏳ |
+| P3-5 | Testdruck mit offenem Deckel | wie P3-4 bei offenem Deckel | `result: printer_error`, kein Hängen; danach druckt P3-4 wieder | ✅ `printer_error`, `cover_open` (error2 = 10h) (21.10.2026) |
+| P3-5b | Testdruck ohne Papier | wie P3-4 ohne Band | `printer_error` | ✅ `end_of_media` (error1 = 02h) – meldet der TD-2020A auch bei Endlosband (21.10.2026) |
+| P3-5c | Verhalten nach Fehler | Deckel schließen bzw. Band einlegen, ohne erneut zu senden | klären: druckt der Drucker den abgebrochenen Auftrag nach? | ⏳ |
 | P3-6 | Abbruch | während des Uploads Browser/WLAN trennen | Log `raw send INCOMPLETE … aborting job`, Drucker druckt nichts Halbes bzw. bricht ab | ⏳ |
 | P3-7 | Abschalten | `raw_send off`, Upload versuchen | `403`; nach Neustart wieder möglich | ⏳ |
 

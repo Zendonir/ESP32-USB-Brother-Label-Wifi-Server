@@ -151,6 +151,14 @@ Das entspricht exakt Anhang A der Raster Command Reference für den TD-2020. Dam
 Referenz (inkl. Statusabfrage `ESC i S`, Modellcode „3“) für das vorhandene Gerät. Interface-Wahl,
 Claim, Printer-Class-Anfragen sowie Trennen/Wiederverbinden funktionieren mit der Firmware.
 
+### Fehlermeldungen am Gerät (21.10.2026)
+
+- Deckel offen: Fehlerinfo 2 = 10h („Cover open“), gemeldet in einer Phasenwechsel-Meldung (06h).
+- Papier leer: Fehlerinfo 1 = 02h („End of media“) – laut Referenz nur für Etiketten, der TD-2020A
+  meldet es aber auch bei Endlosband. Medientyp/-breite bleiben dabei auf dem letzten Wert.
+- Fehler können also in jeder Meldungsart stecken, nicht nur im Statustyp „Error occurred“ (02h);
+  die Firmware wertet deshalb immer die Fehlerbits aus.
+
 ## 5. Bewertung von MAXXTANG/ESP32S3_PrintServer
 
 Geprüft wurde der Stand vom 21.05.2026 (2 Commits).
