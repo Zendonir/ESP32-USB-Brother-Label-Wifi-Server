@@ -12,9 +12,11 @@ on:
         required: false
         default: ""
 
+# Separate groups per event: a manual release run must not cancel the push run
+# of the same commit (that left "cancelled" checks on the commit).
 concurrency:
-  group: firmware-${{ github.ref }}
-  cancel-in-progress: true
+  group: firmware-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 permissions:
   contents: read
