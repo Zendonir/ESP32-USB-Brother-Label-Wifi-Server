@@ -35,8 +35,8 @@ ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
 | Phase | Inhalt | Status |
 |---|---|---|
 | 1 | Hardware- und Protokollanalyse | ✅ [Bericht](docs/phase1-analyse.md) – offene Punkte müssen am Gerät gemessen werden |
-| 2 | USB-Diagnose-Firmware | ✅ implementiert, kompiliert (ESP-IDF 5.5.6 und 6.1), ⏳ Hardwaretest ausstehend |
-| 3 | Zuverlässige USB-Übertragung eines Brother-Druckauftrags | 🔜 wartet auf Diagnoseergebnis |
+| 2 | USB-Diagnose-Firmware | ✅ **am echten TD-2020A getestet** (21.10.2026): VID/PID 0x04F9/0x2055, Printer Class, Bulk IN 0x81 / OUT 0x02 |
+| 3 | Zuverlässige USB-Übertragung eines Brother-Druckauftrags | 🔜 als Nächstes |
 | 4 | WLAN + RAW-TCP 9100 für Windows | 🔜 |
 | 5 | REST-API + zentrale Warteschlange | 🔜 |
 | 6 | Vollständiges Webinterface | 🔜 (Diagnose-UI vorhanden) |

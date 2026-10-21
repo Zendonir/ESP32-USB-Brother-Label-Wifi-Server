@@ -1,10 +1,11 @@
 # Bekannte Einschränkungen (Stand Phase 2)
 
-## Nicht mit Hardware getestet
+## Stand der Hardware-Tests
 
-**Diese Firmware wurde bisher nur kompiliert und auf dem PC (Parser-Unit-Tests) getestet.**
-Sie lief noch nicht auf einem ESP32-S3 und war noch nie mit einem Brother TD-2020A verbunden.
-Alle Hardware-Tests im [Testplan](testplan.md) sind offen.
+Am 21.10.2026 auf einem ESP32-S3-DevKitC-1 (N16R8) mit einem Brother TD-2020A getestet:
+Start, WLAN, Webinterface, USB-Erkennung, Deskriptorbericht, Printer-Class-Anfragen sowie
+Trennen/Wiederverbinden funktionieren (Details im [Testplan](testplan.md)).
+**Noch nicht getestet:** Senden von Druckdaten, Bulk-IN-Lesen, Verhalten ohne Papier, Dauerbetrieb.
 
 ## Funktionsumfang dieser Phase
 

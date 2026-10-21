@@ -9,7 +9,7 @@ Stand: 20.10.2026. Dieses Dokument trennt strikt zwischen **verifiziert**, **aus
 |---|---|
 | ESP-IDF USB-Host-Library (ESP32-S3, Full Speed, Bulk/Control) | verifiziert (API gegen ESP-IDF v5.5.6 kompiliert) |
 | Brother USB-Vendor-ID 0x04F9 | laut Brother Raster Command Reference (Anhang A) |
-| Product-ID des TD-2020A | **nicht dokumentiert** (TD-2020 = 0x2055); wird von der Diagnose-Firmware ausgelesen |
+| Product-ID des TD-2020A | ✅ **am Gerät gemessen: 0x2055** – der TD-2020A meldet sich als „TD-2020“ (wie in der Raster-Referenz); alter Text: nicht dokumentiert (TD-2020 = 0x2055); wird von der Diagnose-Firmware ausgelesen |
 | USB Printer Class, Bulk IN/OUT | laut Raster-Referenz für die TD-2000-Serie ja; für TD-2020A am Gerät zu bestätigen |
 | Brother-Raster-Befehle | dokumentiert (Raster Command Reference 1.01, s. 4.); TD-2020A dort nicht namentlich genannt |
 | P-touch-Template-Befehle | dokumentiert, **TD-2020A ausdrücklich genannt** (P-touch Template 2.0 Reference 3.08) |
@@ -133,6 +133,23 @@ Wichtige Regeln aus der Referenz:
 Folgen für die Firmware: Das Ende eines Druckauftrags lässt sich über die Statusmeldungen auf
 Bulk IN feststellen. Damit kann eine Warteschlange zwischen „übertragen“ und „vom Drucker als
 gedruckt gemeldet“ unterscheiden. Das gilt erst, wenn es am Gerät bestätigt ist.
+
+## 4a. Ergebnis der USB-Diagnose am echten Gerät (21.10.2026)
+
+| Merkmal | gemessen |
+|---|---|
+| Vendor-/Product-ID | 0x04F9 / **0x2055** (identisch mit TD-2020) |
+| Strings | Hersteller „Brother“, Produkt „TD-2020“, Seriennummer vorhanden |
+| USB / Speed | bcdUSB 2.00, Full Speed, bMaxPacketSize0 64 |
+| Konfiguration | 1 Konfiguration, 1 Interface, self-powered, bMaxPower 2 mA |
+| Interface 0 | Printer Class 07/01/**02 (bidirektional)**, keine Alternate Settings |
+| Endpoints | **0x81 Bulk IN** (64 Byte), **0x02 Bulk OUT** (64 Byte) |
+| IEEE 1284 Device ID | `MFG:Brother;CMD:PT-CBP;MDL:TD-2020;CLS:PRINTER;CID:Brother TD Type3;` |
+| GET_PORT_STATUS | 0x18 (selected, kein Fehler, Papier vorhanden) |
+
+Das entspricht exakt Anhang A der Raster Command Reference für den TD-2020. Damit gilt diese
+Referenz (inkl. Statusabfrage `ESC i S`, Modellcode „3“) für das vorhandene Gerät. Interface-Wahl,
+Claim, Printer-Class-Anfragen sowie Trennen/Wiederverbinden funktionieren mit der Firmware.
 
 ## 5. Bewertung von MAXXTANG/ESP32S3_PrintServer
 

@@ -21,16 +21,16 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 |---|---|---|---|---|
 | B1 | Start ohne Drucker (1) | Board ohne USB-Gerät starten | Banner mit Setup-WLAN, `USB host started`, kein Absturz; `/api/status` → `printer.connected=false` | ✅ (21.10.2026, mit ausreichender Versorgung) |
 | B1a | Brownout-Schutz | Board an schwacher Versorgung starten | nach 2 Brownouts `SAFE MODE`, Konsole/`usb` nutzbar, `wifi_start` startet WLAN | ⏳ |
-| B2 | VBUS-Messung | siehe usb-verkabelung.md | 4,7–5,2 V am Adapter | ⏳ |
-| B3 | Drucker nachträglich anschließen (2) | Drucker an, Kabel stecken | `device attached …`, vollständiger Bericht auf der Konsole und unter „USB-Diagnose“ | ⏳ |
-| B4 | Deskriptoren vollständig | Bericht prüfen | Device-, Config-, Interface-, Endpoint-Deskriptoren + Rohdaten-Hexdump; keine `WARNING: descriptor chain` | ⏳ |
-| B5 | Printer-Class-Analyse | Abschnitt ANALYSIS | entweder „USB Printer Class interface … claimed: yes“ oder klar „Vendor-specific CANDIDATE“/„no interface“ | ⏳ |
-| B6 | IEEE-1284-ID | Abschnitt IEEE 1284 | ID-String mit MFG/MDL/CMD oder dokumentierte Fehlermeldung | ⏳ |
-| B7 | Port-Status mit Etiketten | `usb_refresh` | raw-Wert notieren | ⏳ |
+| B2 | VBUS-Messung | siehe usb-verkabelung.md | 4,7–5,2 V am Adapter | ✅ 4,86 V (21.10.2026) |
+| B3 | Drucker nachträglich anschließen (2) | Drucker an, Kabel stecken | `device attached …`, vollständiger Bericht auf der Konsole und unter „USB-Diagnose“ | ✅ (21.10.2026) |
+| B4 | Deskriptoren vollständig | Bericht prüfen | Device-, Config-, Interface-, Endpoint-Deskriptoren + Rohdaten-Hexdump; keine `WARNING: descriptor chain` | ✅ keine Kettenfehler (21.10.2026) |
+| B5 | Printer-Class-Analyse | Abschnitt ANALYSIS | entweder „USB Printer Class interface … claimed: yes“ oder klar „Vendor-specific CANDIDATE“/„no interface“ | ✅ Printer Class 07/01/02, claimed (21.10.2026) |
+| B6 | IEEE-1284-ID | Abschnitt IEEE 1284 | ID-String mit MFG/MDL/CMD oder dokumentierte Fehlermeldung | ✅ `MFG:Brother;CMD:PT-CBP;MDL:TD-2020;…` (21.10.2026) |
+| B7 | Port-Status mit Etiketten | `usb_refresh` | raw-Wert notieren | ✅ raw 0x18 (21.10.2026) |
 | B8 | Port-Status ohne Etiketten / Deckel offen (9) | Rolle entnehmen, `usb_refresh` | raw-Wert notieren (zeigt, ob Papiermangel gemeldet wird) | ⏳ |
 | B9 | Bulk-IN-Lesetest | `usb_read` | Daten oder `ESP_ERR_TIMEOUT` (beides gültig, notieren) | ⏳ |
-| B10 | Trennen im Betrieb (3) | USB-Kabel ziehen | `printer disconnected`, Status `connected=false`, kein Absturz | ⏳ |
-| B11 | Wiederverbinden | Kabel erneut stecken | neuer Bericht, `connects since boot` +1 | ⏳ |
+| B10 | Trennen im Betrieb (3) | USB-Kabel ziehen | `printer disconnected`, Status `connected=false`, kein Absturz | ✅ (21.10.2026) |
+| B11 | Wiederverbinden | Kabel erneut stecken | neuer Bericht, `connects since boot` +1 | ✅ connects 2 (21.10.2026) |
 | B12 | Drucker ausschalten (8) | Netzschalter aus/an | wie B10/B11 | ⏳ |
 | B13 | 20× Stecken/Ziehen | wiederholen | kein Absturz, `internal_free` in `/api/status` stabil (±2 KiB) | ⏳ |
 | B14 | ESP32-Neustart mit angeschlossenem Drucker (11) | `restart` | Drucker wird nach Boot erkannt | ⏳ |

@@ -112,6 +112,36 @@ static const uint8_t CFG_HID[] = {
     7, 0x05, 0x81, 0x03, 8, 0, 10,
 };
 
+/* Real Brother TD-2020A (identifies as TD-2020), captured 21.10.2026 with the diagnostic firmware. */
+static const uint8_t DEV_TD2020A[18] = {
+    0x12, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x40, 0xf9, 0x04, 0x55, 0x20, 0x00, 0x01, 0x01, 0x02, 0x03, 0x01,
+};
+static const uint8_t CFG_TD2020A[] = {
+    0x09, 0x02, 0x20, 0x00, 0x01, 0x01, 0x00, 0xc0, 0x01, 0x09, 0x04, 0x00, 0x00, 0x02, 0x07, 0x01,
+    0x02, 0x00, 0x07, 0x05, 0x81, 0x02, 0x40, 0x00, 0x00, 0x07, 0x05, 0x02, 0x02, 0x40, 0x00, 0x00,
+};
+
+static void test_real_td2020a(void)
+{
+    usb_dev_report_t *r = calloc(1, sizeof(*r));
+    fill_report(r, DEV_TD2020A, CFG_TD2020A, sizeof(CFG_TD2020A));
+    CHECK(usb_rd16(&r->dev_desc[8]) == 0x04f9 && usb_rd16(&r->dev_desc[10]) == 0x2055);
+    CHECK(usb_desc_validate_chain(r->cfg_desc, r->cfg_len) == NULL);
+    CHECK(r->pif.found && r->pif.is_printer_class);
+    CHECK(r->pif.interface_number == 0 && r->pif.alternate_setting == 0 && r->pif.interface_protocol == 2);
+    CHECK(r->pif.ep_out == 0x02 && r->pif.ep_out_mps == 64);
+    CHECK(r->pif.ep_in == 0x81 && r->pif.ep_in_mps == 64);
+    const uint8_t id[] = "\x00\x46MFG:Brother;CMD:PT-CBP;MDL:TD-2020;CLS:PRINTER;CID:Brother TD Type3;";
+    uint16_t lf;
+    bool le;
+    usb_ieee1284_extract(id, sizeof(id) - 1, r->devid, sizeof(r->devid), &lf, &le);
+    CHECK(lf == 70 && !le);
+    char v[32];
+    CHECK(usb_ieee1284_get_field(r->devid, "CMD", v, sizeof(v)) && strcmp(v, "PT-CBP") == 0);
+    dump_json("td2020a", r);
+    free(r);
+}
+
 static void test_bidir(void)
 {
     usb_dev_report_t *r = calloc(1, sizeof(*r));
@@ -307,6 +337,7 @@ int main(int argc, char **argv)
     test_strbuf();
     test_strings();
     test_ieee1284();
+    test_real_td2020a();
     test_bidir();
     test_alts();
     test_vendor();
