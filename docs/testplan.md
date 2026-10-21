@@ -19,7 +19,7 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 
 | ID | Test (entspricht Prompt-Punkt) | Durchführung | Erwartet | Status |
 |---|---|---|---|---|
-| B1 | Start ohne Drucker (1) | Board ohne USB-Gerät starten | Banner mit Setup-WLAN, `USB host started`, kein Absturz; `/api/status` → `printer.connected=false` | ⏳ |
+| B1 | Start ohne Drucker (1) | Board ohne USB-Gerät starten | Banner mit Setup-WLAN, `USB host started`, kein Absturz; `/api/status` → `printer.connected=false` | ✅ (21.10.2026, mit ausreichender Versorgung) |
 | B1a | Brownout-Schutz | Board an schwacher Versorgung starten | nach 2 Brownouts `SAFE MODE`, Konsole/`usb` nutzbar, `wifi_start` startet WLAN | ⏳ |
 | B2 | VBUS-Messung | siehe usb-verkabelung.md | 4,7–5,2 V am Adapter | ⏳ |
 | B3 | Drucker nachträglich anschließen (2) | Drucker an, Kabel stecken | `device attached …`, vollständiger Bericht auf der Konsole und unter „USB-Diagnose“ | ⏳ |
@@ -39,7 +39,7 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 
 | ID | Test | Erwartet | Status |
 |---|---|---|---|
-| C1 | Erster Start | Setup-WLAN `Brother-PrintServer-Setup-XXXX` mit 12-stelligem Passwort (nur Konsole) | ⏳ |
+| C1 | Erster Start | Setup-WLAN `Brother-PrintServer-Setup-XXXX` mit 12-stelligem Passwort (nur Konsole) | ✅ (21.10.2026, mit ausreichender Versorgung) |
 | C2 | Webinterface über Setup-WLAN | `http://192.168.4.1/` lädt, DE/EN umschaltbar | ⏳ |
 | C3 | WLAN-Daten setzen (Web) | Verbindung, IP in Konsole; Setup-AP schaltet nach 60 s ab | ⏳ |
 | C4 | WLAN-Daten ändern aus dem Heimnetz | `403` (nur über Setup-AP erlaubt) | ⏳ |
