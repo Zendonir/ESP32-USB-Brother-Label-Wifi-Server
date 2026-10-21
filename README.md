@@ -220,6 +220,12 @@ Die Schnittstelle ist `POST /api/print/raw` mit zwei Kopfzeilen (ab 0.4.1):
   Server denselben Auftrag mit demselben Schlüssel noch einmal; der Printserver erkennt ihn,
   antwortet `200` mit dem vorhandenen Auftrag (`"duplicate": true`) und druckt **nicht** doppelt.
 
+Etiketten werden über den **Lückensensor** positioniert: der Server kündigt in jedem Auftrag
+gestanzte Etiketten mit Breite und Länge an (`ESC i z`), der Drucker setzt dann jedes Etikett
+selbst an der Lücke an. Vorher vergleicht der Server die Maße mit dem, was der Drucker über
+`/api/status` bzw. `/api/printer/status` als eingelegt meldet, und hält Aufträge bei falscher
+Rolle zurück.
+
 Das Ergebnis holt der Server über `GET /api/jobs/{id}`; der Schlüssel steht im Auftrag. Nach
 einem Neustart des Printservers fängt die Nummerierung wieder bei 1 an – passt der Schlüssel
 nicht, gilt der Auftrag als „Ergebnis unbekannt“ statt eines fremden Ergebnisses.
