@@ -56,6 +56,8 @@ typedef struct {
     bool data_kept;         /* retry possible */
     uint8_t attempts;
     char message[96];
+    char name[48];          /* label for people, e.g. "Etikett LEB000123" (X-Job-Name) */
+    char key[40];           /* idempotency key of the sender (X-Job-Key), "" = none */
 } print_job_info_t;
 
 typedef struct {
@@ -79,8 +81,17 @@ esp_err_t print_queue_start(void);
 esp_err_t print_spool_append(print_spool_t *sp, const uint8_t *data, size_t len);
 void print_spool_free(print_spool_t *sp);
 
-/* Takes ownership of the spool data (also on error). */
-esp_err_t print_queue_submit(print_spool_t *sp, job_source_t src, const char *client, uint32_t *id_out);
+/*
+ * Takes ownership of the spool data (also on error). `name` and `key` may be
+ * NULL. A sender that repeats a request after a lost answer passes the same
+ * `key`; print_queue_find_key() then returns the first job instead of printing
+ * the label twice.
+ */
+esp_err_t print_queue_submit(print_spool_t *sp, job_source_t src, const char *client,
+                             const char *name, const char *key, uint32_t *id_out);
+
+/* Job submitted with this idempotency key (any state but incomplete). ESP_ERR_NOT_FOUND if none. */
+esp_err_t print_queue_find_key(const char *key, uint32_t *id_out);
 
 /* Records a job whose network transfer failed (nothing is printed), for the job list. */
 void print_queue_record_incomplete(job_source_t src, const char *client, size_t size, const char *reason);

@@ -188,7 +188,8 @@ static void finish_locked(slot_t *s, job_state_t st, const char *msg)
 /* Public API                                                                */
 /* ------------------------------------------------------------------------- */
 
-esp_err_t print_queue_submit(print_spool_t *sp, job_source_t src, const char *client, uint32_t *id_out)
+esp_err_t print_queue_submit(print_spool_t *sp, job_source_t src, const char *client,
+                             const char *name, const char *key, uint32_t *id_out)
 {
     if (sp->len == 0) {
         print_spool_free(sp);
@@ -227,6 +228,8 @@ esp_err_t print_queue_submit(print_spool_t *sp, job_source_t src, const char *cl
     s->info.created_s = uptime_s();
     s->info.data_kept = true;
     strlcpy(s->info.client, client ? client : "", sizeof(s->info.client));
+    strlcpy(s->info.name, name ? name : "", sizeof(s->info.name));
+    strlcpy(s->info.key, key ? key : "", sizeof(s->info.key));
     strlcpy(s->info.message, "queued", sizeof(s->info.message));
     uint32_t id = s->info.id;
     xSemaphoreGive(s_lock);
@@ -311,6 +314,25 @@ esp_err_t print_queue_retry(uint32_t id)
     return err;
 }
 
+esp_err_t print_queue_find_key(const char *key, uint32_t *id_out)
+{
+    if (!key || !key[0]) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    esp_err_t err = ESP_ERR_NOT_FOUND;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    for (int i = 0; i < MAX_SLOTS; i++) {
+        const slot_t *s = &s_slots[i];
+        if (s->used && s->info.state != JOB_INCOMPLETE && strcmp(s->info.key, key) == 0) {
+            *id_out = s->info.id;
+            err = ESP_OK;
+            break;
+        }
+    }
+    xSemaphoreGive(s_lock);
+    return err;
+}
+
 esp_err_t print_queue_get(uint32_t id, print_job_info_t *out)
 {
     xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -370,6 +392,10 @@ void print_queue_job_json(const print_job_info_t *j, strbuf_t *sb)
               (unsigned long)j->finished_s, j->attempts, j->printer_completed ? "true" : "false",
               j->printer_error ? "true" : "false", can_retry ? "true" : "false", can_cancel ? "true" : "false");
     sb_json_str(sb, j->message);
+    sb_puts(sb, ",\"name\":");
+    sb_json_str(sb, j->name);
+    sb_puts(sb, ",\"key\":");
+    sb_json_str(sb, j->key);
     sb_putc(sb, '}');
 }
 
@@ -424,9 +450,9 @@ void print_queue_print_list(void)
     uint32_t now = uptime_s();
     for (int i = 0; i < n; i++) {
         const print_job_info_t *j = &list[i];
-        printf("%4lu  %-10s  %-7s  %-15s %6u %4lus  %s\n", (unsigned long)j->id, print_job_state_name(j->state),
+        printf("%4lu  %-10s  %-7s  %-15s %6u %4lus  %s%s%s\n", (unsigned long)j->id, print_job_state_name(j->state),
                print_job_source_name(j->source), j->client, (unsigned)j->size,
-               (unsigned long)(now - j->created_s), j->message);
+               (unsigned long)(now - j->created_s), j->name, j->name[0] ? ": " : "", j->message);
     }
     if (n == 0) {
         printf("  (no jobs)\n");

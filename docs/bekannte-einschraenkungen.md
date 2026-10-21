@@ -11,7 +11,10 @@ Ein Testdruck mit einer Datei des Originaltreibers wurde gedruckt; der Drucker h
 
 ## Funktionsumfang dieser Phase
 
-- Port 9100 (RAW) und `POST /api/print/raw` mit gemeinsamer Warteschlange (ab 0.4.0). Noch nicht:
+- Port 9100 (RAW) und `POST /api/print/raw` mit gemeinsamer Warteschlange (ab 0.4.0); ab 0.4.1
+  mit Auftragsname und Idempotenzschlüssel (`X-Job-Name`, `X-Job-Key`) für den
+  Lebensmittel-Server. Der Schlüssel wird nur erkannt, solange der Auftrag noch in der Liste
+  (24 Einträge, RAM) steht. Noch nicht:
   P-touch-Template-API, API-Key (Phase 5/7), IPP/AirPrint.
 - Aufträge werden vollständig im PSRAM zwischengespeichert (max. 4 MiB je Auftrag, 6 MiB gesamt),
   bevor sie gedruckt werden – so erreicht eine abgebrochene Übertragung nie den Drucker.

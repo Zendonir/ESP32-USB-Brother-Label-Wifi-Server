@@ -302,6 +302,11 @@ static esp_err_t h_status(httpd_req_t *req)
     }
     sb_putc(&sb, ',');
 
+    /* What senders such as the Lebensmittel-Server check before using the print API:
+     * job_key = X-Job-Key is honoured (no duplicate label after a repeated request). */
+    sb_printf(&sb, "\"print_api\":{\"version\":1,\"job_name\":true,\"job_key\":true,\"max_job_bytes\":%d},",
+              CONFIG_PRINT_QUEUE_MAX_JOB_BYTES);
+
 #if CONFIG_DIAG_ENABLE_RAW_SEND
     sb_printf(&sb, "\"features\":{\"raw_send\":%s,\"raw_send_available\":true,\"raw_send_max_bytes\":%d}}",
               s_raw_send_enabled ? "true" : "false", CONFIG_PRINT_QUEUE_MAX_JOB_BYTES);
@@ -449,9 +454,69 @@ static const char *receive_job(httpd_req_t *req, print_spool_t *sp, bool *connec
     return NULL;
 }
 
-/* Common part of POST /api/print/raw and /api/diag/raw: spool and queue the body. */
-static esp_err_t submit_from_request(httpd_req_t *req, uint32_t *id)
+/*
+ * Optional request header, reduced to printable ASCII (it ends up in JSON and
+ * on the serial console). Returns false if the header is missing.
+ */
+static bool header_ascii(httpd_req_t *req, const char *field, char *out, size_t size)
 {
+    out[0] = '\0';
+    size_t len = httpd_req_get_hdr_value_len(req, field);
+    if (len == 0) {
+        return false;
+    }
+    char buf[96];
+    if (httpd_req_get_hdr_value_str(req, field, buf, sizeof(buf)) == ESP_ERR_NOT_FOUND) {
+        return false;
+    }
+    size_t n = 0;
+    for (const char *p = buf; *p && n + 1 < size; p++) {
+        out[n++] = (*p >= 0x20 && *p < 0x7f) ? *p : '?';
+    }
+    out[n] = '\0';
+    return n > 0;
+}
+
+/* Reads and drops the request body (a repeated job whose data is not needed). */
+static void discard_body(httpd_req_t *req)
+{
+    static uint8_t sink[1024];
+    size_t left = req->content_len;
+    while (left > 0) {
+        int r = httpd_req_recv(req, (char *)sink, left < sizeof(sink) ? left : sizeof(sink));
+        if (r == HTTPD_SOCK_ERR_TIMEOUT) {
+            continue;
+        }
+        if (r <= 0) {
+            return;
+        }
+        left -= (size_t)r;
+    }
+}
+
+/*
+ * Common part of POST /api/print/raw and /api/diag/raw: spool and queue the body.
+ *
+ * Headers (both optional):
+ *   X-Job-Name  shown in the job list, e.g. "Etikett LEB000123"
+ *   X-Job-Key   idempotency key. A sender that did not get an answer (Wi-Fi
+ *               dropped after the upload) repeats the request with the same
+ *               key and gets the first job back instead of a second label.
+ * *duplicate is true when the key belonged to an existing job; nothing new is queued.
+ */
+static esp_err_t submit_from_request(httpd_req_t *req, uint32_t *id, bool *duplicate)
+{
+    *duplicate = false;
+    char name[sizeof(((print_job_info_t *)0)->name)];
+    char key[sizeof(((print_job_info_t *)0)->key)];
+    header_ascii(req, "X-Job-Name", name, sizeof(name));
+    header_ascii(req, "X-Job-Key", key, sizeof(key));
+    if (key[0] && print_queue_find_key(key, id) == ESP_OK) {
+        discard_body(req);
+        *duplicate = true;
+        ESP_LOGI(TAG, "job key %s already known as job %lu, not queued again", key, (unsigned long)*id);
+        return ESP_OK;
+    }
     if (req->content_len == 0 || req->content_len > CONFIG_PRINT_QUEUE_MAX_JOB_BYTES) {
         send_json_msg(req, "413 Payload Too Large", false, "empty body or larger than the maximum job size");
         return ESP_FAIL;
@@ -483,14 +548,14 @@ static esp_err_t submit_from_request(httpd_req_t *req, uint32_t *id)
         }
         return ESP_FAIL;
     }
-    if (print_queue_submit(&sp, JOB_SRC_HTTP, client, id) != ESP_OK) {
+    if (print_queue_submit(&sp, JOB_SRC_HTTP, client, name, key, id) != ESP_OK) {
         send_json_msg(req, "503 Service Unavailable", false, "print queue full");
         return ESP_FAIL;
     }
     return ESP_OK;
 }
 
-static esp_err_t send_job(httpd_req_t *req, const char *status, uint32_t id)
+static esp_err_t send_job_ex(httpd_req_t *req, const char *status, uint32_t id, bool duplicate)
 {
     print_job_info_t j;
     if (print_queue_get(id, &j) != ESP_OK) {
@@ -498,9 +563,9 @@ static esp_err_t send_job(httpd_req_t *req, const char *status, uint32_t id)
     }
     strbuf_t sb;
     sb_init(&sb, s_resp, RESP_BUF_SIZE);
-    sb_printf(&sb, "{\"ok\":%s,\"job_id\":%lu,\"result\":\"%s\",\"job\":",
+    sb_printf(&sb, "{\"ok\":%s,\"job_id\":%lu,\"result\":\"%s\",\"duplicate\":%s,\"job\":",
               (j.state == JOB_FAILED || j.state == JOB_INCOMPLETE || j.state == JOB_CANCELLED) ? "false" : "true",
-              (unsigned long)id, print_job_state_name(j.state));
+              (unsigned long)id, print_job_state_name(j.state), duplicate ? "true" : "false");
     print_queue_job_json(&j, &sb);
     sb_putc(&sb, '}');
     if (status) {
@@ -509,14 +574,23 @@ static esp_err_t send_job(httpd_req_t *req, const char *status, uint32_t id)
     return send_json(req, &sb);
 }
 
-/* POST /api/print/raw: queue printer-ready data, answer immediately (202 + job id). */
+static esp_err_t send_job(httpd_req_t *req, const char *status, uint32_t id)
+{
+    return send_job_ex(req, status, id, false);
+}
+
+/*
+ * POST /api/print/raw: queue printer-ready data, answer immediately (202 + job id).
+ * A repeated X-Job-Key answers 200 with the existing job ("duplicate": true).
+ */
 static esp_err_t h_print_raw(httpd_req_t *req)
 {
     uint32_t id = 0;
-    if (submit_from_request(req, &id) != ESP_OK) {
+    bool duplicate = false;
+    if (submit_from_request(req, &id, &duplicate) != ESP_OK) {
         return ESP_OK; /* response already sent (or connection gone) */
     }
-    return send_job(req, "202 Accepted", id);
+    return send_job_ex(req, duplicate ? "200 OK" : "202 Accepted", id, duplicate);
 }
 
 #if CONFIG_DIAG_ENABLE_RAW_SEND
@@ -531,7 +605,8 @@ static esp_err_t h_diag_raw(httpd_req_t *req)
                              "raw send was disabled on the serial console ('raw_send on' enables it again)");
     }
     uint32_t id = 0;
-    if (submit_from_request(req, &id) != ESP_OK) {
+    bool duplicate = false;
+    if (submit_from_request(req, &id, &duplicate) != ESP_OK) {
         return ESP_OK;
     }
     print_job_info_t j;

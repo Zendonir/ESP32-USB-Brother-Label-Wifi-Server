@@ -91,12 +91,26 @@ paths:
   /api/print/raw:
     post:
       summary: Queue printer-ready data (e.g. produced by the Brother driver); returns immediately
+      description: >
+        Optional headers: X-Job-Name is shown in the job list; X-Job-Key is an
+        idempotency key. A request repeated with a key the queue already knows
+        (e.g. after a lost answer) is not queued again - the answer is 200 with
+        the existing job and "duplicate": true. Supported when /api/status
+        reports print_api.job_key = true (firmware >= 0.4.1).
+      parameters:
+        - { name: X-Job-Name, in: header, required: false, schema: { type: string, maxLength: 47 } }
+        - { name: X-Job-Key, in: header, required: false, schema: { type: string, maxLength: 39 } }
       requestBody:
         required: true
         content:
           application/octet-stream:
             schema: { type: string, format: binary }
       responses:
+        '200':
+          description: X-Job-Key already known - existing job, nothing queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobResult' }
         '202':
           description: Queued
           content:
@@ -225,12 +239,15 @@ components:
         can_retry: { type: boolean }
         can_cancel: { type: boolean }
         message: { type: string }
+        name: { type: string, description: X-Job-Name of the sender }
+        key: { type: string, description: X-Job-Key of the sender; compare it to detect a restarted print server (job ids start at 1 again) }
     JobResult:
       type: object
       properties:
         ok: { type: boolean }
         job_id: { type: integer }
         result: { type: string }
+        duplicate: { type: boolean }
         job: { $ref: '#/components/schemas/Job' }
     BrotherStatusEnvelope:
       type: object

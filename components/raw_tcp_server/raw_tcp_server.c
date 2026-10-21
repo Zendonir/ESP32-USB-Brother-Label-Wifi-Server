@@ -115,7 +115,7 @@ static void handle_client(int sock, const char *client)
         return;
     }
     uint32_t id = 0;
-    if (print_queue_submit(&sp, JOB_SRC_RAW9100, client, &id) != ESP_OK) {
+    if (print_queue_submit(&sp, JOB_SRC_RAW9100, client, NULL, NULL, &id) != ESP_OK) {
         print_queue_record_incomplete(JOB_SRC_RAW9100, client, 0, "print queue full - job rejected");
     }
 }

@@ -202,6 +202,34 @@ Protokoll **Raw**, Port **9100**, SNMP aus, originaler Brother-Treiber.
 - Webinterface → **Aufträge**; Konsole `jobs`, `jobs retry <id>`, `jobs cancel <id>`;
   `raw_allow 192.168.3.0/24` begrenzt Port 9100 auf ein Netz.
 
+## Zusammenspiel mit dem Lebensmittel-Server
+
+Der [Lebensmittel-Scanner](https://github.com/Zendonir/ESP32_Lebensmittel_BT_Scanner_Docker)
+druckt seine Etiketten über diesen Printserver. Die Aufgaben sind klar getrennt:
+
+| Lebensmittel-Server (Docker) | Printserver (dieser ESP32) |
+|---|---|
+| zeichnet das Etikett (Name, MHD, QR-Code) | nimmt fertige Druckdaten an, spoolt sie vollständig |
+| setzt es in Brother-Rasterbefehle um – Vorlage ist eine Druckdatei des Originaltreibers | prüft vor dem Druck den Brother-Status, wartet bei offenem Deckel/ohne Papier |
+| fragt den Auftrag ab und zeigt Ergebnis/Fehler im Browser und am Terminal | meldet, was der Drucker zurückgibt (`gedruckt`, `fehlgeschlagen`, `unbestätigt`) |
+
+Die Schnittstelle ist `POST /api/print/raw` mit zwei Kopfzeilen (ab 0.4.1):
+
+- `X-Job-Name` – erscheint in der Auftragsliste (z. B. „Etikett LEB000123“)
+- `X-Job-Key` – Idempotenzschlüssel. Geht die Antwort im WLAN verloren, schickt der
+  Server denselben Auftrag mit demselben Schlüssel noch einmal; der Printserver erkennt ihn,
+  antwortet `200` mit dem vorhandenen Auftrag (`"duplicate": true`) und druckt **nicht** doppelt.
+
+Das Ergebnis holt der Server über `GET /api/jobs/{id}`; der Schlüssel steht im Auftrag. Nach
+einem Neustart des Printservers fängt die Nummerierung wieder bei 1 an – passt der Schlüssel
+nicht, gilt der Auftrag als „Ergebnis unbekannt“ statt eines fremden Ergebnisses.
+`/api/status` meldet unter `print_api` (`job_key: true`), dass die Firmware das kann.
+
+Einrichtung im Lebensmittel-Server: *Etiketten → Brother-Drucker (WLAN)* – die **IP-Adresse**
+des Printservers eintragen (`.local` löst ein Docker-Container meist nicht auf; am besten im
+Router eine feste Adresse vergeben), die Treiberdatei des ersten Testdrucks (`test.prn`)
+einlesen, Testetikett drucken.
+
 ## Phase 3: Status und Testdruck
 
 **Status:** Konsole `brother_status` oder im Webinterface „Status abfragen“. Gezeigt werden Medium
@@ -282,7 +310,7 @@ Webinterface: `http://brother-td2020.local/` bzw. `http://192.168.4.1/` (Setup-W
 | GET | `/api/usb/text` | USB-Bericht (Text, wie Konsole) |
 | POST | `/api/usb/refresh` | IEEE-1284-ID/Port-Status neu abfragen |
 | GET | `/api/log` | Log |
-| POST | `/api/print/raw` | druckfertige Daten in die Warteschlange (202 + Job-ID) |
+| POST | `/api/print/raw` | druckfertige Daten in die Warteschlange (202 + Job-ID); `X-Job-Name`, `X-Job-Key` (keine Doppeldrucke) |
 | GET | `/api/jobs` | alle Aufträge + Statistik |
 | GET/DELETE | `/api/jobs/{id}` | Auftrag abfragen / abbrechen (wartend) |
 | POST | `/api/jobs/{id}/retry` | fehlgeschlagenen Auftrag erneut drucken |

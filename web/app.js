@@ -263,7 +263,8 @@ async function loadJobs() {
         : j.can_retry ? `<button class="secondary" data-act="retry" data-id="${j.id}">${t('retry')}</button>` : '';
       return `<tr><td>${j.id}</td><td class="${STATE_CLASS[j.state] || ''}">${esc(t('st_' + j.state))}</td>` +
         `<td>${j.source === 'raw9100' ? 'Port 9100' : 'HTTP'}</td><td>${esc(j.client)}</td>` +
-        `<td>${(j.size / 1024).toFixed(1)} KiB</td><td>${fmtUptime(age)}</td><td>${esc(j.message)}</td><td>${btn}</td></tr>`;
+        `<td>${(j.size / 1024).toFixed(1)} KiB</td><td>${fmtUptime(age)}</td>` +
+        `<td>${j.name ? `<b>${esc(j.name)}</b><br>` : ''}${esc(j.message)}</td><td>${btn}</td></tr>`;
     });
     $('jobs-body').innerHTML = rows.join('') || `<tr><td colspan="8">${t('no_jobs')}</td></tr>`;
   } catch (e) { /* shown via status */ }
