@@ -12,6 +12,15 @@ menu "Brother print server"
             GPIO0 is the BOOT button on ESP32-S3-DevKitC-1 compatible boards.
             Holding it during power-up enters the ROM download mode instead.
 
+    config APP_USB_DEBUG_LOG
+        bool "Log every USB attach/enumeration step (ESP-IDF tags HUB and ENUM at debug level)"
+        default y
+        help
+            ESP-IDF reports a detected connection only at debug level. With
+            this option the diagnostic firmware shows "Root port reset",
+            enumeration stages and their results on the console. Only USB
+            events produce output, so it is not noisy.
+
     config APP_LOG_BUFFER_SIZE
         int "Size of the in-RAM log buffer shown in the web interface (bytes)"
         range 4096 262144

@@ -8,7 +8,7 @@
 Open-Source-Firmware (ESP-IDF, C), die einen Brother TD-2020A Etikettendrucker per USB an einen
 ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
 
-> **Aktueller Stand: Phase 2 – USB-Diagnose-Firmware (v0.2.1-diag).**
+> **Aktueller Stand: Phase 2 – USB-Diagnose-Firmware (v0.2.2-diag).**
 > Diese Version **druckt noch nicht**. Sie erkennt den Drucker, liest alle USB-Deskriptoren
 > aus und zeigt sie auf der seriellen Konsole und im Webinterface an. Sie ist bisher **nur
 > kompiliert und auf dem PC getestet, nicht auf echter Hardware.** Mit Ihren Messwerten wird
@@ -203,6 +203,20 @@ mehreren hundert mA). Ursache ist praktisch immer die Stromversorgung:
 Ab Firmware 0.2.1 startet das Board nach zwei Brownouts in Folge im **Sicherheitsmodus** ohne
 WLAN. Die USB-Diagnose über die serielle Konsole (`usb`, `usb_refresh`, `usb_read`) funktioniert
 dann trotzdem; `wifi_start` versucht das WLAN erneut.
+
+### Drucker angesteckt, aber keinerlei USB-Meldung im Log
+
+Ab 0.2.2 erscheint beim Anstecken mindestens `D (...) HUB: Root port reset` und danach die
+Enumeration (`ENUM: ...`). Kommt **gar nichts**, sieht der ESP32 keinen Pull-up des Druckers:
+
+1. Drucker eingeschaltet? Kabel ab- und wieder anstecken, Log beobachten.
+2. Board **stromlos**: Durchgang Mini-B Pin 3 → **GPIO20**, Pin 2 → **GPIO19**, Pin 5 → **GND**,
+   Pin 1 → **5V**. Kein Durchgang zwischen den Adern untereinander.
+3. Board an, Drucker an und gesteckt: Spannung gegen GND messen an
+   - **D+ (GPIO20)**: ca. 3,0–3,6 V → Full-Speed-Gerät meldet sich korrekt an
+   - **D− (GPIO19)**: ca. 0 V
+   - D− hoch und D+ ≈ 0 V → **D+ und D− vertauscht**
+   - beide ≈ 0 V → Drucker sieht kein VBUS oder ist nicht im USB-Modus
 
 ## Serielle Konsole
 

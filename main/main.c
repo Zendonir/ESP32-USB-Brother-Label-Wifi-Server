@@ -126,6 +126,12 @@ void app_main(void)
 
     ESP_ERROR_CHECK(cfg_init());
 
+#if CONFIG_APP_USB_DEBUG_LOG
+    /* ESP-IDF logs a detected connection and the enumeration stages only at debug level. */
+    esp_log_level_set("HUB", ESP_LOG_DEBUG);
+    esp_log_level_set("ENUM", ESP_LOG_DEBUG);
+#endif
+
     /* USB first: independent of Wi-Fi, the console report works without network. */
     esp_err_t err = usb_printer_start();
     if (err != ESP_OK) {
