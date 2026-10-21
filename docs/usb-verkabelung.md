@@ -74,6 +74,25 @@ Bitte **nicht** einfach 5 V an beliebige Pins löten. Die Optionen in absteigend
 Melden Sie bitte das Messergebnis und die Board-Beschriftungen (Foto beider Seiten), dann
 kann die passende Variante konkret festgelegt werden.
 
+## Alternative: Kabel direkt an die Stiftleiste löten
+
+Statt USB-C-Buchse, Lötbrücke und OTG-Adapter kann ein USB-Kabel (z. B. ein aufgeschnittenes
+USB-A-auf-Mini-B-Kabel, A-Seite abgeschnitten) direkt angelötet werden. Elektrisch ist das dieselbe
+Verbindung wie die „USB“-Buchse:
+
+| Kabelader (übliche Farbe) | Board-Pin |
+|---|---|
+| VBUS (rot) | **5V** |
+| GND (schwarz) | **GND** |
+| D− (weiß) | **GPIO19** |
+| D+ (grün) | **GPIO20** |
+
+- Aderfarben sind nicht garantiert – vorher mit dem Durchgangsprüfer gegen den Mini-B-Stecker prüfen.
+- D+/D− kurz halten (möglichst < 20 cm) und miteinander verdrillt führen.
+- GPIO19/20 sind dieselben Leitungen wie die „USB“-Buchse: dort dann **nichts** zusätzlich einstecken.
+- Die Spannung am 5V-Pin vorher messen (bei offener „IN-OUT“-Brücke liegt sie wegen der Diode etwas
+  unter 5 V); optional eine selbstrückstellende Sicherung (PTC, ca. 500 mA) in die VBUS-Ader.
+
 ## Schritt 3 – Drucker anschließen
 
 1. Drucker mit eigenem Netzteil einschalten.
