@@ -59,7 +59,10 @@ jobs:
           elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             v="${GITHUB_REF_NAME#v}"
           else
-            v="0.4.0-dev-${GITHUB_SHA::7}"
+            # Not a release: version from CMakeLists.txt plus the commit, so a
+            # branch build never claims an older version than its sources.
+            base="$(sed -n 's/.*set(PROJECT_VER "\(.*\)").*/\1/p' CMakeLists.txt)"
+            v="${base:-0.0.0}-${GITHUB_SHA::7}"
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
@@ -97,7 +100,9 @@ jobs:
     name: Publish web flasher (GitHub Pages)
     needs: [host-tests, build]
     # The github-pages environment only accepts deployments from the default branch.
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    # Only release runs publish: a push run of the same commit finished after the
+    # v0.4.1-dev release run and replaced the flasher with an unreleased build.
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     permissions:
       pages: write

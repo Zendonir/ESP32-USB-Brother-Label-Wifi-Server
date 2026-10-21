@@ -124,7 +124,9 @@ liegen als Artefakt am jeweiligen Lauf unter *Actions*. Fertige Versionen stehen
 
 Neues Release erstellen: *Actions → Firmware → Run workflow*, bei `release_tag` z. B. `v0.3.0`
 eintragen. Alternativ erzeugt auch ein gepushtes Git-Tag `v*` ein Release. Versionen mit
-Bindestrich (z. B. `v0.2.0-diag`) werden als Vorabversion markiert.
+Bindestrich (z. B. `v0.2.0-diag`) werden als Vorabversion markiert. Der Browser-Flasher wird **nur** von einem
+solchen Release-Lauf (*Run workflow* mit `release_tag`) aktualisiert und zeigt damit immer die
+zuletzt veröffentlichte Version; normale Pushes bauen nur.
 
 ### Mit ESP-IDF
 
