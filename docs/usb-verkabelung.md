@@ -1,5 +1,51 @@
 # USB-Verkabelung und VBUS-Versorgung
 
+## Standardaufbau: Druckerkabel direkt angelötet
+
+```
+ PC / Netzteil ──► [USB-C "COM"]  ESP32-S3-DevKitC-1 (N16R8)      [USB-C "USB"]  ← bleibt FREI
+                   Strom, Flashen,
+                   Konsole           5V ─────── rot   (VBUS) ─┐
+                                     GND ────── schwarz (GND) ─┤ USB-Kabel ── Mini-B ──► Brother TD-2020A
+                                     GPIO19 ─── weiß  (D−)   ─┤                          (eigenes Netzteil)
+                                     GPIO20 ─── grün  (D+)   ─┘
+```
+
+Kein OTG-Adapter und keine Lötbrücke nötig: **„USB-OTG“ und „IN-OUT“ bleiben offen.**
+
+### Material
+- USB-A-auf-Mini-B-Kabel, möglichst kurz (der A-Stecker wird abgeschnitten)
+- optional: selbstrückstellende Sicherung (PTC, ca. 500 mA) für die VBUS-Ader, Schrumpfschlauch
+
+### Schritte
+1. **Adern bestimmen:** A-Stecker abschneiden, ca. 3 cm abisolieren. Mit dem Durchgangsprüfer
+   jede Ader gegen den Mini-B-Stecker prüfen – Farben sind nicht genormt.
+   Mini-B-Pinbelegung (Stecker): 1 = VBUS, 2 = D−, 3 = D+, 4 = ID (frei), 5 = GND.
+   Die Abschirmung (Geflecht/blanker Draht) kommt zusätzlich an GND.
+2. **Anlöten** an die Stiftleiste (Beschriftung auf dem Board prüfen):
+   VBUS → **5V**, GND → **G/GND**, D− → **19**, D+ → **20**.
+   D− und D+ nicht vertauschen; die beiden Adern verdrillt und kurz lassen (< 20 cm).
+   Widerstände sind nicht nötig (die Pull-downs für den Host-Betrieb sind im ESP32-S3).
+3. **Zugentlastung:** Kabel mit Kabelbinder oder Heißkleber am Board fixieren, damit die Lötstellen
+   nicht abreißen.
+4. **Prüfen vor dem Einschalten:** kein Kurzschluss zwischen 5V und GND (Durchgangsprüfer).
+5. **Messen:** Board über **COM** versorgen, Drucker noch **nicht** angesteckt. Am Mini-B-Stecker
+   Pin 1 gegen Pin 5 messen: erwartet ca. 4,5–5,0 V (bei offener „IN-OUT“-Brücke wegen der Diode
+   etwas unter 5 V).
+6. Drucker einschalten, Mini-B einstecken → in der Konsole erscheint `device attached …`.
+
+### Regeln für den Betrieb
+- In die USB-C-Buchse **„USB“** kommt **nichts** – sie hängt an denselben Leitungen GPIO19/20.
+- Strom wahlweise über **COM** (Entwicklung, mit Konsole) **oder** später ein 5-V-Netzteil am
+  **5V**-Pin (Dauerbetrieb). Nicht beides gleichzeitig, solange nicht gemessen ist, ob das Board
+  eine Rückstromdiode zwischen COM-Buchse und 5V-Pin hat.
+- Der TD-2020A ist laut Brother self-powered; er nutzt VBUS vermutlich nur zur Erkennung. Der
+  tatsächliche Wert steht nach der Enumeration im Bericht (`bMaxPower`).
+
+---
+
+Der folgende Teil beschreibt die frühere Variante mit **OTG-Adapter** an der „USB“-Buchse.
+
 ```
  Netzteil 5 V ≥ 1 A ──► [USB-C "COM/UART"]  ESP32-S3 DevKitC-1  [USB-C "USB/OTG"] ──► USB-C-OTG-Adapter
                                     (Konsole, Flashen)              (GPIO19 D−, GPIO20 D+)      │

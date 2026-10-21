@@ -63,11 +63,13 @@ ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
 ## Hardware und Verkabelung
 
 - ESP32-S3-DevKitC-1-Nachbau mit Modul ESP32-S3-WROOM-1-N16R8 (16 MB Flash, 8 MB Octal-PSRAM), getestet wird mit einem Board von Binghe
-- USB-C-OTG-Adapter am **nativen** USB-Port, USB-A-auf-Mini-B-Kabel zum Drucker
+- **Druckerkabel direkt angelötet:** VBUS → 5V, GND → GND, D− → GPIO19, D+ → GPIO20
+  (USB-A-auf-Mini-B-Kabel, A-Stecker abgeschnitten). Alternativ OTG-Adapter an der „USB“-Buchse
+  mit geschlossener Lötbrücke „USB-OTG“.
 - Stromversorgung und Konsole über den **UART/COM**-USB-C-Port
 
 **Bitte vor dem ersten Anschließen [docs/usb-verkabelung.md](docs/usb-verkabelung.md) lesen.**
-Der Drucker wird nur erkannt, wenn am OTG-Adapter 5 V (VBUS) anliegen. Ob das Board das ohne
+Der Drucker wird nur erkannt, wenn an seinem USB-Anschluss 5 V (VBUS) anliegen. Ob das Board das ohne
 Änderung liefert, hängt von der Platinenrevision ab und muss gemessen werden.
 
 ## Kompilieren
@@ -194,7 +196,7 @@ mehreren hundert mA). Ursache ist praktisch immer die Stromversorgung:
 
 - anderes, **kurzes USB-Kabel** verwenden (dünne/lange Kabel haben zu viel Widerstand)
 - anderen USB-Port am PC (Rückseite) oder einen **aktiven USB-Hub** bzw. ein 5-V-Netzteil (≥ 1 A)
-- OTG-Adapter und Drucker **abziehen**, solange das Problem besteht
+- Drucker **abziehen**, solange das Problem besteht
 - falls eine Lötbrücke „USB-OTG“ geschlossen ist: prüfen, ob am nativen Port etwas Strom zieht
 - notfalls einen Elko (z. B. 470–1000 µF) zwischen 5 V und GND des Boards
 

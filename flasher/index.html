@@ -91,17 +91,18 @@
       </li>
       <li>Mit dem Setup-WLAN verbinden, <code>http://192.168.4.1/</code> öffnen und unter <strong>WLAN</strong>
         Ihr Heimnetz eintragen. Danach erreichbar unter <code>http://brother-td2020.local/</code>.</li>
-      <li>Drucker über USB-OTG-Adapter am <strong>nativen</strong> USB-Port anschließen und den USB-Bericht im
+      <li>Drucker anschließen – Kabel direkt angelötet (5V, GND, GPIO19 = D−, GPIO20 = D+) oder per OTG-Adapter am
+        <strong>nativen</strong> USB-Port – und den USB-Bericht im
         Reiter <strong>USB-Diagnose</strong> (oder mit <code>usb</code> in der Konsole) abrufen.</li>
     </ol>
-    <p>Wichtig vor dem Anschließen des Druckers: die 5-V-Versorgung (VBUS) am OTG-Adapter prüfen –
+    <p>Wichtig vor dem Anschließen des Druckers: die 5-V-Versorgung (VBUS) am Druckerkabel prüfen –
       siehe <a id="wiring" href="#">Anleitung zur USB-Verkabelung</a>.</p>
   </div>
 
   <div class="card">
     <h2>Neustart-Schleife „Brownout detector was triggered“?</h2>
     <p>Die Stromversorgung reicht für den WLAN-Start nicht aus. Bitte ein kurzes, gutes USB-Kabel, einen
-      anderen USB-Port (oder aktiven Hub / 5-V-Netzteil ≥ 1 A) verwenden und OTG-Adapter sowie Drucker vorerst
+      anderen USB-Port (oder aktiven Hub / 5-V-Netzteil ≥ 1 A) verwenden und den Drucker vorerst
       abziehen. Nach zwei Brownouts in Folge startet die Firmware ohne WLAN; die USB-Diagnose funktioniert
       dann in der Konsole weiterhin (<code>usb</code>), <code>wifi_start</code> versucht das WLAN erneut.</p>
   </div>
