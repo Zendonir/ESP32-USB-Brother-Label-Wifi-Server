@@ -13,6 +13,10 @@
 
 Kein OTG-Adapter und keine Lötbrücke nötig: **„USB-OTG“ und „IN-OUT“ bleiben offen.**
 
+✅ **Am 21.10.2026 mit Binghe-Board und TD-2020A erfolgreich getestet** (Erkennung, Bericht,
+Printer-Class-Anfragen). Beim ersten Versuch waren D+/D− vertauscht – das Kabel hatte eine
+abweichende Aderfarbe; ohne Fehlermeldung wurde dann einfach nichts erkannt.
+
 ### Material
 - USB-A-auf-Mini-B-Kabel, möglichst kurz (der A-Stecker wird abgeschnitten)
 - optional: selbstrückstellende Sicherung (PTC, ca. 500 mA) für die VBUS-Ader, Schrumpfschlauch
