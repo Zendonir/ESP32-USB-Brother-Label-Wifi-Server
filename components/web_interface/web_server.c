@@ -34,13 +34,14 @@ extern const uint8_t style_css_end[] asm("_binary_style_css_end");
 
 /* esp_http_server runs all handlers in one task, so one response buffer is enough. */
 static char *s_resp;
-/* /api/diag/raw is compiled in but only accepted after 'raw_send on' on the serial console. */
-static volatile bool s_raw_send_enabled;
+/* /api/diag/raw is on by default (like port 9100 later, it accepts print data from the
+ * local network); 'raw_send off' on the serial console disables it until restart. */
+static volatile bool s_raw_send_enabled = true;
 
 void web_server_set_raw_send(bool enable)
 {
     s_raw_send_enabled = enable;
-    ESP_LOGW(TAG, "raw send endpoint %s", enable ? "ENABLED (until restart)" : "disabled");
+    ESP_LOGW(TAG, "raw send endpoint %s", enable ? "enabled" : "DISABLED (until restart)");
 }
 
 bool web_server_raw_send_enabled(void)
@@ -436,7 +437,7 @@ static esp_err_t h_diag_raw(httpd_req_t *req)
 {
     if (!s_raw_send_enabled) {
         return send_json_msg(req, "403 Forbidden", false,
-                             "raw send is disabled; enable it on the serial console with 'raw_send on'");
+                             "raw send was disabled on the serial console ('raw_send on' enables it again)");
     }
     if (req->content_len == 0 || req->content_len > CONFIG_DIAG_RAW_SEND_MAX_BYTES) {
         return send_json_msg(req, "413 Payload Too Large", false, "empty body or larger than DIAG_RAW_SEND_MAX_BYTES");

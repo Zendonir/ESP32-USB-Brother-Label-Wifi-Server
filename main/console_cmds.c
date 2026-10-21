@@ -74,7 +74,7 @@ static int cmd_raw_send(int argc, char **argv)
         printf("usage: raw_send [on|off]\n");
         return 1;
     }
-    printf("POST /api/diag/raw is %s\n", web_server_raw_send_enabled() ? "ENABLED (until restart)" : "disabled");
+    printf("POST /api/diag/raw is %s\n", web_server_raw_send_enabled() ? "enabled" : "disabled until restart");
     return 0;
 }
 
@@ -198,7 +198,7 @@ void console_start(void)
         { .command = "brother_status", .help = "Query the Brother printer status (ESC i S): media, errors, phase",
           .func = cmd_brother_status },
         { .command = "raw_send", .hint = "[on|off]",
-          .help = "Allow POST /api/diag/raw (send a driver-generated print file) until restart",
+          .help = "Enable/disable POST /api/diag/raw (test print with a driver file); default on",
           .func = cmd_raw_send },
         { .command = "status", .help = "Show printer, Wi-Fi and memory status", .func = cmd_status },
         { .command = "wifi_set", .hint = "<ssid> [password]", .help = "Store Wi-Fi credentials and connect",

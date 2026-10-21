@@ -145,7 +145,7 @@
       <div id="raw-card" class="hidden">
         <h3 data-i18n="raw_title">Testdruck mit Treiberdatei (.prn)</h3>
         <p class="hint" data-i18n="raw_help">Datei, die der originale Brother-Treiber mit „Ausgabe in Datei“ erzeugt hat.
-          Wird unverändert an den Drucker gesendet. Freischalten auf der seriellen Konsole mit <code>raw_send on</code>.</p>
+          Wird unverändert an den Drucker gesendet.</p>
         <p id="raw-state" class="hint"></p>
         <form id="raw-form">
           <input type="file" id="raw-file" required>
@@ -162,7 +162,7 @@
         <li><code>GET /api/printer/status</code> · <code>?cached=1</code></li>
         <li><code>POST /api/wifi</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
         <li><code>POST /api/system/restart</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
-        <li id="api-raw" class="hidden"><code>POST /api/diag/raw</code> <span data-i18n="raw_hint">(Entwicklungsfunktion, nur nach „raw_send on“)</span></li>
+        <li id="api-raw" class="hidden"><code>POST /api/diag/raw</code> <span data-i18n="raw_hint">(Testdruck mit Treiberdatei)</span></li>
       </ul>
     </div>
   </section>

@@ -196,10 +196,9 @@ fehlerhafter Enumeration, erscheinen `ENUM`-Fehlermeldungen der ESP-IDF – bitt
 1. Unter Windows den Brother-Treiber für den TD-2020 installieren (Drucker dafür kurz per USB am
    PC oder direkt Anschluss `FILE:` wählen).
 2. Ein kleines Etikett drucken mit „Ausgabe in Datei umleiten“ bzw. Anschluss `FILE:` → `test.prn`.
-3. Auf der seriellen Konsole `raw_send on` eingeben (gilt bis zum Neustart).
-4. Webinterface → **System** → „Testdruck mit Treiberdatei“ → Datei wählen → „An Drucker senden“.
+3. Webinterface → **System** → „Testdruck mit Treiberdatei“ → Datei wählen → „An Drucker senden“.
    Alternativ: `curl --data-binary @test.prn -H "Content-Type: application/octet-stream" http://<ip>/api/diag/raw`
-5. Die Antwort zeigt `result`: `printed` (Drucker meldet „Druck abgeschlossen“), `printer_error`,
+4. Die Antwort zeigt `result`: `printed` (Drucker meldet „Druck abgeschlossen“), `printer_error`,
    `sent_no_confirmation` oder `transfer_failed`, dazu alle Meldungen des Druckers.
 
 ## Fehlerbehebung
@@ -243,7 +242,7 @@ Enumeration (`ENUM: ...`). Kommt **gar nichts**, sieht der ESP32 keinen Pull-up 
 | `usb_refresh` | IEEE-1284-ID und Port-Status neu abfragen, Bericht ausgeben |
 | `usb_read` | einmal vom Bulk-IN-Endpoint lesen (1 s), Hexdump |
 | `brother_status` | Brother-Statusabfrage (`ESC i S`): Medium, Breite, Fehler, Phase |
-| `raw_send [on\|off]` | Testdruck-Upload (`/api/diag/raw`) bis zum Neustart freischalten |
+| `raw_send [on\|off]` | Testdruck-Upload (`/api/diag/raw`) bis zum Neustart abschalten/einschalten (Standard: an) |
 | `status` | Drucker, WLAN, Speicher |
 | `wifi_set <ssid> [passwort]` | WLAN speichern und verbinden |
 | `wifi_start` | WLAN und Webserver starten (nach Sicherheitsmodus) |
@@ -269,7 +268,7 @@ Webinterface: `http://brother-td2020.local/` bzw. `http://192.168.4.1/` (Setup-W
 | GET | `/api/printer/status` | Brother-Status live abfragen (`?cached=1`: letzter Stand ohne Druckerzugriff) |
 | POST | `/api/wifi` | WLAN setzen – **nur über Setup-WLAN** |
 | POST | `/api/system/restart` | Neustart – **nur über Setup-WLAN** |
-| POST | `/api/diag/raw` | Treiberdatei unverändert an den Drucker; nur nach `raw_send on` auf der Konsole |
+| POST | `/api/diag/raw` | Treiberdatei unverändert an den Drucker (Testdruck) |
 
 Beispiele:
 

@@ -13,8 +13,9 @@ Trennen/Wiederverbinden funktionieren (Details im [Testplan](testplan.md)).
 - Brother-Befehle (ab 0.3.0): nur die dokumentierte Statusabfrage (Invalidate, `ESC @`, `ESC i S`)
   und der Abbruch eines unvollständigen Auftrags (Invalidate + `ESC @`). Keine eigenen Raster- oder
   Template-Daten.
-- Testdruck nur über `/api/diag/raw` mit einer Datei des Originaltreibers; ohne Authentifizierung,
-  daher nach jedem Neustart gesperrt und nur über die serielle Konsole (`raw_send on`) freischaltbar.
+- Testdruck nur über `/api/diag/raw` mit einer Datei des Originaltreibers; ohne Authentifizierung
+  (wie später Port 9100: Druckdaten werden aus dem lokalen Netz angenommen). Abschaltbar mit
+  `raw_send off` auf der seriellen Konsole.
   Während des Testdrucks blockiert der Webserver bis zu 30 s (Warten auf die Druckermeldungen).
 - Ein herstellerspezifisches Interface (Klasse 0xFF) wird nur angezeigt, nicht belegt,
   solange `CONFIG_USB_PRINTER_ALLOW_VENDOR_INTERFACE` aus ist.

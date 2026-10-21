@@ -123,7 +123,7 @@ paths:
     post:
       summary: "DEVELOPMENT: forward a driver-generated print file unchanged to bulk OUT"
       description: |
-        Disabled after every boot; enable on the serial console with `raw_send on`.
+        Enabled by default; `raw_send off` on the serial console disables it until restart.
         No authentication, no queue. After the transfer the firmware collects the
         printer's own status messages for up to 30 s; `result` is `printed` only if
         the printer reported "printing completed".
@@ -138,7 +138,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RawResult' }
-        '403': { description: Not enabled on the serial console }
+        '403': { description: Disabled on the serial console }
         '409': { description: Printer not ready or busy }
         '413': { description: Empty or too large }
         '502':

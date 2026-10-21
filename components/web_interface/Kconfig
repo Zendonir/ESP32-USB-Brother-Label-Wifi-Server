@@ -6,9 +6,9 @@ menu "Diagnostic web interface"
         help
             Development aid for phase 3: lets you send a print file that was
             produced by the ORIGINAL Brother driver ("print to file") to the
-            printer. The endpoint is OFF after every boot and must be enabled
-            on the serial console with 'raw_send on'. There is no
-            authentication and no queue in this phase.
+            printer. It is available after boot (like a network printer it
+            accepts print data from the local network); 'raw_send off' on the
+            serial console disables it until restart.
 
     config DIAG_RAW_SEND_MAX_BYTES
         int "Maximum body size for /api/diag/raw"
