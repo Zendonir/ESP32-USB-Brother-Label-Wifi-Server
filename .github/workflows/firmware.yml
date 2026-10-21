@@ -61,7 +61,8 @@ jobs:
           else
             # Not a release: version from CMakeLists.txt plus the commit, so a
             # branch build never claims an older version than its sources.
-            base="$(sed -n 's/.*set(PROJECT_VER "\(.*\)").*/\1/p' CMakeLists.txt)"
+            # Only the literal version (the other PROJECT_VER line is $ENV{FW_VERSION}).
+            base="$(sed -n 's/.*set(PROJECT_VER "\([0-9][^"]*\)").*/\1/p' CMakeLists.txt | head -n 1)"
             v="${base:-0.0.0}-${GITHUB_SHA::7}"
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
