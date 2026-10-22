@@ -68,7 +68,7 @@ paths:
               schema: { $ref: '#/components/schemas/Message' }
   /api/printer/status:
     get:
-      summary: Brother status request (invalidate, ESC @, ESC i S) and its 32-byte reply
+      summary: Brother status request (invalidate, ESC @, ESC i a 01h, ESC i S) and its 32-byte reply
       parameters:
         - name: cached
           in: query

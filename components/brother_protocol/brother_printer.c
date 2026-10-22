@@ -99,8 +99,12 @@ esp_err_t brother_query_status(brother_status_t *out)
         }
     }
 
-    uint8_t query[BROTHER_INVALIDATE_LEN + 5];
+    uint8_t query[BROTHER_STATUS_QUERY_LEN];
     size_t n = brother_build_status_query(query, sizeof(query));
+    if (n == 0) {
+        err = ESP_ERR_INVALID_SIZE;
+        goto out;
+    }
     size_t written = 0;
     err = usb_printer_write(query, n, QUERY_WRITE_TIMEOUT_MS, &written);
     if (err != ESP_OK) {
@@ -133,10 +137,11 @@ out:
     return err;
 }
 
-void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, brother_status_log_t *log)
+void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, uint32_t first_ms, brother_status_log_t *log)
 {
     memset(log, 0, sizeof(*log));
-    int64_t end = esp_timer_get_time() + (int64_t)total_ms * 1000;
+    int64_t start = esp_timer_get_time();
+    int64_t end = start + (int64_t)total_ms * 1000;
     int64_t last_rx = 0;
     int64_t done_at = 0;
     while (esp_timer_get_time() < end) {
@@ -172,6 +177,10 @@ void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, brother_statu
             break;
         }
         if (last_rx && now - last_rx > (int64_t)idle_ms * 1000) {
+            break;
+        }
+        if (!last_rx && now - start > (int64_t)first_ms * 1000) {
+            ESP_LOGW(TAG, "printer sent no status within %lu s after the job", (unsigned long)(first_ms / 1000));
             break;
         }
     }
@@ -217,7 +226,7 @@ esp_err_t brother_settings_exchange(brother_setting_io_t *io, size_t n)
             break;
         }
     }
-    uint8_t buf[BROTHER_INVALIDATE_LEN + 8];
+    uint8_t buf[BROTHER_SETTINGS_PREFIX_LEN + 8];  /* also holds the 7/8-byte ESC i X commands */
     size_t len = brother_build_settings_prefix(buf, sizeof(buf));
     err = usb_printer_write(buf, len, QUERY_WRITE_TIMEOUT_MS, NULL);
     for (size_t i = 0; err == ESP_OK && i < n; i++) {

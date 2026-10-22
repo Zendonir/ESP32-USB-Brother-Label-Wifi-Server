@@ -74,21 +74,25 @@ int main(int argc, char **argv)
     d[2] = 'X';
     CHECK(!brother_status_parse(d, sizeof(d), &st));
 
-    /* documented query sequence: 200 x 00h, ESC @, ESC i S */
+    /* query sequence: 200 x 00h, ESC @, ESC i a 01h (raster mode), ESC i S */
     uint8_t q[256];
     size_t n = brother_build_status_query(q, sizeof(q));
-    CHECK(n == 205);
+    CHECK(n == 209 && n == BROTHER_STATUS_QUERY_LEN);
+    /* exactly the buffer size the firmware's caller uses */
+    uint8_t exact[BROTHER_STATUS_QUERY_LEN];
+    CHECK(brother_build_status_query(exact, sizeof(exact)) == BROTHER_STATUS_QUERY_LEN);
+    CHECK(brother_build_status_query(exact, sizeof(exact) - 1) == 0);
     int zeros = 1;
     for (int i = 0; i < 200; i++) {
         zeros &= q[i] == 0x00;
     }
     CHECK(zeros);
-    CHECK(memcmp(q + 200, "\x1b\x40\x1b\x69\x53", 5) == 0);
+    CHECK(memcmp(q + 200, "\x1b\x40\x1b\x69\x61\x01\x1b\x69\x53", 9) == 0);
     CHECK(brother_build_status_query(q, 100) == 0);
 
     /* settings: documented static commands (P-touch Template reference, chapter 8) */
     n = brother_build_settings_prefix(q, sizeof(q));
-    CHECK(n == 206 && memcmp(q + 200, "\x1b\x40\x1b\x69\x61\x01", 6) == 0);
+    CHECK(n == 206 && n == BROTHER_SETTINGS_PREFIX_LEN && memcmp(q + 200, "\x1b\x40\x1b\x69\x61\x01", 6) == 0);
     CHECK(brother_build_settings_prefix(q, 10) == 0);
     n = brother_build_setting_get('q', q, sizeof(q));
     CHECK(n == 7 && memcmp(q, "\x1b\x69\x58\x71\x31\x00\x00", 7) == 0);
