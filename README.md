@@ -40,7 +40,7 @@ ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
 | 4 | WLAN + RAW-TCP 9100 für Windows, Druckwarteschlange | 🚧 implementiert (0.4.0-dev), ⏳ Test mit Windows |
 | 5 | REST-API + zentrale Warteschlange | 🔜 |
 | 6 | Vollständiges Webinterface | 🔜 (Diagnose-UI vorhanden) |
-| 7 | OTA, API-Key, Recovery | 🔜 (Partitionen und Rollback vorbereitet) |
+| 7 | OTA, API-Key, Recovery | 🟡 Firmware-Update im Web (ab 0.5.0), Rollback aktiv; API-Key offen |
 | 8 | Integrations- und Dauertests | 🔜 |
 
 ## Was Phase 2 kann
@@ -54,7 +54,7 @@ ESP32-S3 anschließt und ihn im lokalen WLAN bereitstellt – ohne Cloud.
   **GET_PORT_STATUS** – **keine** Brother-spezifischen Befehle
 - Erkennen von Trennen/Wiederverbinden, automatische Neuinitialisierung
 - Bulk-OUT/IN-Transport mit eigener Timeout-Behandlung und Endpoint-Recovery (für Phase 3)
-- WLAN: Setup-Access-Point mit **individuellem Zufallspasswort**, Station-Modus mit
+- WLAN: **offener** Setup-Access-Point mit Captive Portal (Einrichtungsseite öffnet sich von selbst), Station-Modus mit
   Auto-Reconnect, Fallback-AP nach 120 s ohne Verbindung, mDNS `brother-td2020.local`
 - Diagnose-Webinterface (Deutsch/Englisch), JSON-API, Log-Ansicht
 - Serielle Konsole mit Diagnosebefehlen
@@ -148,28 +148,53 @@ python -m esptool --chip esp32s3 -p COM5 -b 460800 write_flash \
 ```
 
 Das `*-merged.bin` aus dem Release wird an Offset 0x0 geschrieben, überschreibt dabei aber auch
-den NVS-Bereich (WLAN-Daten, Setup-Passwort).
+den NVS-Bereich (WLAN-Daten).
 
 ## Ersteinrichtung (WLAN)
 
-1. Nach dem ersten Start erscheint auf der seriellen Konsole (115200 Baud):
-   ```
-   *****************************************************
-     Setup Wi-Fi   SSID    : Brother-PrintServer-Setup-A1B2
-                   Password: kH7mP2xQr9Tz
-                   URL     : http://192.168.4.1/
-   *****************************************************
-   ```
-   Das Passwort wird beim ersten Start zufällig erzeugt und bleibt im NVS gespeichert.
-   Jederzeit erneut anzeigen mit dem Konsolenbefehl `ap_info`.
-2. Mit diesem WLAN verbinden, `http://192.168.4.1/` öffnen, Reiter **WLAN**, SSID und Passwort
-   eingeben. Alternativ auf der Konsole: `wifi_set "Mein WLAN" "geheim123"`.
+1. Nach dem ersten Start (und immer, wenn das Gerät 120 s lang kein WLAN erreicht) öffnet es das
+   **offene** WLAN `Brother-PrintServer-Setup-XXXX` – ohne Passwort.
+2. Handy oder Laptop damit verbinden. Die Einrichtungsseite **öffnet sich von selbst**
+   (Captive Portal: jeder Name wird auf `192.168.4.1` aufgelöst, die Verbindungsprüfung des
+   Systems landet auf der Seite; DHCP meldet die Portal-Adresse zusätzlich nach RFC 8910).
+   Falls nicht: `http://192.168.4.1/` öffnen. Dort **Netzwerke suchen**, das eigene WLAN
+   antippen, Passwort eingeben, **Speichern & verbinden**.
+   Alternativ auf der Konsole: `wifi_set "Mein WLAN" "geheim123"`; `ap_info` zeigt SSID und Adresse.
 3. Die erhaltene IP-Adresse steht in der Konsole (`connected, IP …`). Der Setup-AP schaltet
    sich 60 s nach erfolgreicher Verbindung ab. Danach: `http://brother-td2020.local/`.
-4. WLAN-Daten zurücksetzen: Konsole `wifi_clear` oder **BOOT-Taste im Betrieb 5 s halten**.
+4. WLAN-Daten zurücksetzen: **BOOT-Taste im Betrieb 10 s halten** (oder Konsole `wifi_clear`).
+   Danach startet das Gerät mit dem offenen Setup-WLAN, alles lässt sich neu eingeben.
+
+**BOOT-Taste im Betrieb** (nicht beim Einschalten – dann startet der Download-Modus):
+
+| Drücken | Wirkung |
+|---|---|
+| kurz (unter 2 s) | Neustart – USB-Verbindung zum Drucker und Warteschlange beginnen neu, z. B. wenn etwas hängt |
+| 10 s halten | WLAN-Daten löschen, Neustart ins Setup-WLAN |
+| 2–10 s, dann loslassen | nichts |
+
+Der Neustart setzt den Printserver zurück, nicht den Drucker selbst; hängt der TD-2020A, ihn
+aus- und einschalten. Die Warteschlange des Printservers liegt im RAM: Aufträge, die dort noch
+warteten, schickt der Lebensmittel-Server neu; einer, der gerade druckte, steht dort danach als
+„Ergebnis unbekannt“ (nachdrucken von Hand).
 
 Aus Sicherheitsgründen lassen sich WLAN-Daten und Neustart über das Web **nur** aus dem
-Setup-WLAN heraus ändern, nicht aus dem Heimnetz.
+Setup-WLAN heraus ändern, nicht aus dem Heimnetz. Umgekehrt nimmt das Gerät ein
+**Firmware-Update nur aus dem Heimnetz** an, nie über das offene Setup-WLAN.
+
+Das Setup-WLAN ist bewusst offen: Es läuft nur, solange das Gerät kein WLAN hat (erste
+Einrichtung, oder 120 s ohne Verbindung), und schaltet sich 60 s nach erfolgreicher Verbindung
+ab. In dieser Zeit kann jeder in Funkreichweite die WLAN-Daten setzen.
+
+## Firmware-Update (OTA)
+
+Reiter **System → Firmware-Update**: `brother_printserver.bin` aus dem
+[neuesten Release](https://github.com/Zendonir/ESP32-USB-Brother-Label-Wifi-Server/releases/latest)
+wählen (nicht die `-merged.bin`), **Installieren**. Die Datei wird in die zweite OTA-Partition
+geschrieben, geprüft (Projektname, Format, Prüfsumme) und erst dann aktiviert; danach startet das
+Gerät neu. Startet die neue Firmware nicht, kehrt der Bootloader zur alten zurück (Rollback).
+WLAN-Daten bleiben erhalten. Per Kommandozeile:
+`curl --data-binary @brother_printserver.bin -H 'Content-Type: application/octet-stream' http://brother-td2020.local/api/system/ota`
 
 ## Diagnose durchführen – was ich von Ihnen brauche
 
@@ -321,7 +346,7 @@ Enumeration (`ENUM: ...`). Kommt **gar nichts**, sieht der ESP32 keinen Pull-up 
 | `wifi_set <ssid> [passwort]` | WLAN speichern und verbinden |
 | `wifi_start` | WLAN und Webserver starten (nach Sicherheitsmodus) |
 | `wifi_clear` | WLAN-Daten löschen, Neustart in den Setup-Modus |
-| `ap_info` | Setup-WLAN und Passwort anzeigen |
+| `ap_info` | Setup-WLAN (SSID, Adresse) anzeigen |
 | `log` | gepufferten Log ausgeben |
 | `log_level <tag\|*> <none\|error\|warn\|info\|debug\|verbose>` | Log-Level ändern |
 | `restart` | Neustart |
@@ -346,6 +371,8 @@ Webinterface: `http://brother-td2020.local/` bzw. `http://192.168.4.1/` (Setup-W
 | GET | `/api/printer/status` | Brother-Status live abfragen (`?cached=1`: letzter Stand ohne Druckerzugriff) |
 | GET/POST | `/api/printer/settings` | im Drucker gespeicherte Einstellungen lesen / setzen (`command_mode=1&recovery=0`), ab 0.4.2 |
 | POST | `/api/wifi` | WLAN setzen – **nur über Setup-WLAN** |
+| GET | `/api/wifi/scan` | WLANs in Reichweite – **nur über Setup-WLAN** |
+| POST | `/api/system/ota` | Firmware-Update (Rumpf: `brother_printserver.bin`) – **nur aus dem Heimnetz**, ab 0.5.0 |
 | POST | `/api/system/restart` | Neustart – **nur über Setup-WLAN** |
 | POST | `/api/diag/raw` | Treiberdatei unverändert an den Drucker (Testdruck) |
 

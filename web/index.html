@@ -146,8 +146,12 @@
       <h2 data-i18n="wifi_setup">WLAN einrichten</h2>
       <p id="wifi-locked" class="alert hidden" data-i18n="wifi_locked">Aus Sicherheitsgründen können die WLAN-Daten nur geändert
         werden, wenn Sie mit dem Setup-WLAN des Geräts verbunden sind (oder über die serielle Konsole: <code>wifi_set</code>).</p>
+      <div id="scan-box" class="hidden">
+        <button type="button" id="scan-btn" class="secondary" data-i18n="scan">Netzwerke suchen</button>
+        <ul id="scan-list" class="nets"></ul>
+      </div>
       <form id="wifi-form">
-        <label>SSID <input name="ssid" maxlength="32" required autocomplete="off"></label>
+        <label>SSID <input name="ssid" id="wifi-ssid" maxlength="32" required autocomplete="off"></label>
         <label><span data-i18n="password">Passwort</span>
           <input name="password" type="password" maxlength="64" autocomplete="new-password"></label>
         <button type="submit" data-i18n="save_connect">Speichern &amp; verbinden</button>
@@ -172,6 +176,22 @@
       <p class="hint" data-i18n="restart_hint">Neustart ist in dieser Phase nur über das Setup-WLAN oder die serielle Konsole erlaubt.</p>
       <button id="restart" class="danger" data-i18n="restart">Neustart</button>
       <p id="sys-msg" class="hint"></p>
+      <div id="ota-card" class="hidden">
+        <h3 data-i18n="ota_title">Firmware-Update</h3>
+        <p class="hint"><span data-i18n="ota_running">Läuft:</span> <span id="ota-version">–</span></p>
+        <p class="hint" data-i18n="ota_help">Datei brother_printserver.bin aus dem GitHub-Release wählen (nicht die
+          -merged.bin). Laufende Druckaufträge gehen beim Neustart verloren.</p>
+        <p id="ota-locked" class="alert hidden" data-i18n="ota_locked">Firmware-Updates gehen nur aus dem Heimnetz,
+          nicht über das offene Setup-WLAN.</p>
+        <form id="ota-form">
+          <input type="file" id="ota-file" accept=".bin" required>
+          <button type="submit" data-i18n="ota_install">Installieren</button>
+        </form>
+        <progress id="ota-progress" class="hidden" max="100" value="0"></progress>
+        <p id="ota-msg" class="hint"></p>
+        <p class="hint"><a href="https://github.com/Zendonir/ESP32-USB-Brother-Label-Wifi-Server/releases/latest"
+          target="_blank" rel="noopener" data-i18n="ota_releases">Neueste Version auf GitHub</a></p>
+      </div>
       <div id="raw-card" class="hidden">
         <h3 data-i18n="raw_title">Testdruck mit Treiberdatei (.prn)</h3>
         <p class="hint" data-i18n="raw_help">Datei, die der originale Brother-Treiber mit „Ausgabe in Datei“ erzeugt hat.
@@ -192,7 +212,8 @@
         <li><code>GET /api/printer/status</code> · <code>?cached=1</code></li>
         <li><code>POST /api/print/raw</code> · <code>GET /api/jobs</code> · <code>GET|DELETE /api/jobs/{id}</code> · <code>POST /api/jobs/{id}/retry</code></li>
         <li><code>TCP 9100</code> RAW (Windows: Standard-TCP/IP-Port)</li>
-        <li><code>POST /api/wifi</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
+        <li><code>POST /api/wifi</code> · <code>GET /api/wifi/scan</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
+        <li><code>POST /api/system/ota</code> <span data-i18n="lan_only">(nur aus dem Heimnetz)</span></li>
         <li><code>POST /api/system/restart</code> <span data-i18n="ap_only">(nur über Setup-WLAN)</span></li>
         <li id="api-raw" class="hidden"><code>POST /api/diag/raw</code> <span data-i18n="raw_hint">(Testdruck mit Treiberdatei)</span></li>
       </ul>

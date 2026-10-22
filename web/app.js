@@ -44,6 +44,14 @@ const I18N = {
     q_summary: '%q waiting · %p printed · %f failed',
     st_queued: 'queued', st_waiting: 'waiting', st_printing: 'printing', st_printed: 'printed',
     st_failed: 'failed', st_unknown: 'unconfirmed', st_cancelled: 'cancelled', st_incomplete: 'incomplete',
+    scan: 'Search networks', scanning: 'Searching…', scan_none: 'No networks found.', open_net: 'open',
+    lan_only: '(home network only)', ota_title: 'Firmware update', ota_running: 'Running:',
+    ota_help: 'Choose brother_printserver.bin from the GitHub release (not the -merged.bin). Running print jobs ' +
+      'are lost when the device restarts.',
+    ota_locked: 'Firmware updates are only possible from your home network, not over the open setup Wi-Fi.',
+    ota_install: 'Install', ota_releases: 'Latest version on GitHub', ota_uploading: 'Uploading… %p %',
+    ota_checking: 'Checking and installing…', ota_done: 'Version %v installed. The device restarts – reloading in a moment.',
+    ota_confirm: 'Install this firmware and restart the device?',
   },
   de: {
     title: 'Brother TD-2020A Printserver', phase: 'Phase 4 · Windows-Druck (Port 9100)',
@@ -90,6 +98,14 @@ const I18N = {
     q_summary: '%q wartend · %p gedruckt · %f fehlgeschlagen',
     st_queued: 'wartet', st_waiting: 'wartet auf Drucker', st_printing: 'druckt', st_printed: 'gedruckt',
     st_failed: 'fehlgeschlagen', st_unknown: 'unbestätigt', st_cancelled: 'abgebrochen', st_incomplete: 'unvollständig',
+    scan: 'Netzwerke suchen', scanning: 'Suche…', scan_none: 'Keine Netzwerke gefunden.', open_net: 'offen',
+    lan_only: '(nur aus dem Heimnetz)', ota_title: 'Firmware-Update', ota_running: 'Läuft:',
+    ota_help: 'Datei brother_printserver.bin aus dem GitHub-Release wählen (nicht die -merged.bin). Laufende ' +
+      'Druckaufträge gehen beim Neustart verloren.',
+    ota_locked: 'Firmware-Updates gehen nur aus dem Heimnetz, nicht über das offene Setup-WLAN.',
+    ota_install: 'Installieren', ota_releases: 'Neueste Version auf GitHub', ota_uploading: 'Wird übertragen… %p %',
+    ota_checking: 'Wird geprüft und installiert…', ota_done: 'Version %v installiert. Das Gerät startet neu – die Seite lädt gleich neu.',
+    ota_confirm: 'Diese Firmware installieren und das Gerät neu starten?',
   },
 };
 
@@ -164,6 +180,18 @@ function renderStatus(s) {
   $('f-version').textContent = `${s.firmware.name} ${s.firmware.version} · ${s.firmware.build}`;
 
   $('wifi-locked').classList.toggle('hidden', w.via_setup_ap);
+  $('scan-box').classList.toggle('hidden', !w.via_setup_ap);
+  // Captive portal: whoever arrives over the setup Wi-Fi wants to set it up.
+  if (w.via_setup_ap && !portalShown) {
+    portalShown = true;
+    showTab('wifi');
+    scanNetworks();
+  }
+  const ota = s.ota || {};
+  $('ota-card').classList.toggle('hidden', !ota.available);
+  $('ota-locked').classList.toggle('hidden', ota.allowed !== false);
+  if (!otaBusy) $('ota-form').querySelectorAll('input,button').forEach((e) => { e.disabled = !ota.allowed; });
+  $('ota-version').textContent = `${s.firmware.version} (${ota.running || '–'})`;
   $('wifi-form').querySelectorAll('input,button').forEach((e) => { e.disabled = !w.via_setup_ap; });
   $('restart').disabled = !w.via_setup_ap;
   $('api-raw').classList.toggle('hidden', !s.features.raw_send_available);
@@ -389,6 +417,68 @@ $('raw-form').addEventListener('submit', async (ev) => {
     out.textContent = JSON.stringify(await r.json(), null, 2);
   } catch (e) { out.textContent = e.message; }
 });
+let portalShown = false;
+let otaBusy = false;
+
+async function scanNetworks() {
+  const list = $('scan-list');
+  $('scan-btn').disabled = true;
+  list.innerHTML = `<li class="hint">${esc(t('scanning'))}</li>`;
+  try {
+    const r = await api('/api/wifi/scan');
+    list.innerHTML = r.networks.length ? r.networks.map((n) =>
+      `<li><button type="button" class="net" data-ssid="${esc(n.ssid)}">${esc(n.ssid)}` +
+      `<span class="hint">${n.rssi} dBm${n.open ? ' · ' + esc(t('open_net')) : ''}</span></button></li>`).join('')
+      : `<li class="hint">${esc(t('scan_none'))}</li>`;
+  } catch (e) { list.innerHTML = `<li class="hint">${esc(e.message)}</li>`; }
+  $('scan-btn').disabled = false;
+}
+$('scan-btn').addEventListener('click', scanNetworks);
+$('scan-list').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button[data-ssid]');
+  if (!b) return;
+  $('wifi-ssid').value = b.dataset.ssid;
+  $('wifi-form').elements.password.focus();
+});
+
+// Upload with XMLHttpRequest - fetch() has no upload progress.
+$('ota-form').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const f = $('ota-file').files[0];
+  if (!f || !confirm(t('ota_confirm'))) return;
+  const bar = $('ota-progress'), msg = $('ota-msg');
+  otaBusy = true;
+  $('ota-form').querySelectorAll('input,button').forEach((e) => { e.disabled = true; });
+  bar.classList.remove('hidden');
+  bar.value = 0;
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/system/ota');
+  xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+  xhr.upload.onprogress = (e) => {
+    if (!e.lengthComputable) return;
+    bar.value = Math.round(e.loaded * 100 / e.total);
+    msg.textContent = bar.value < 100 ? t('ota_uploading').replace('%p', bar.value) : t('ota_checking');
+  };
+  const fertig = (text) => {
+    otaBusy = false;
+    msg.textContent = text;
+    bar.classList.add('hidden');
+    if (lastStatus) renderStatus(lastStatus);
+  };
+  xhr.onload = () => {
+    let body = {};
+    try { body = JSON.parse(xhr.responseText); } catch (e) { /* ignore */ }
+    if (xhr.status === 200 && body.ok) {
+      msg.textContent = t('ota_done').replace('%v', body.version || '');
+      setTimeout(() => location.reload(), 15000);
+    } else {
+      fertig(body.message || xhr.statusText || String(xhr.status));
+    }
+  };
+  xhr.onerror = () => fertig(t('conn_err'));
+  xhr.send(f);
+});
+
 $('wifi-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const body = new URLSearchParams(new FormData(ev.target));

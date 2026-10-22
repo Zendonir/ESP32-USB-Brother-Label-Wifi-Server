@@ -1,24 +1,27 @@
 #include "wifi_manager.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "app_config.h"
-#include "bootloader_random.h"
+#include "captive_dns.h"
 #include "esp_event.h"
+#include "esp_idf_version.h"
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
-#include "esp_random.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "lwip/inet.h"
+#include "lwip/sockets.h"
 #include "sdkconfig.h"
 
 static const char *TAG = "wifi_mgr";
 
-#define AP_PASS_LEN         12
 #define AP_STOP_DELAY_US    (60LL * 1000 * 1000)
 #define RECONNECT_MAX_MS    30000
 #define AP_CLIENT_RETRY_MS  15000
@@ -27,7 +30,6 @@ static esp_netif_t *s_sta_netif;
 static esp_netif_t *s_ap_netif;
 static SemaphoreHandle_t s_lock;
 static wifi_mgr_status_t s_st;
-static char s_ap_pass[AP_PASS_LEN + 1];
 
 static esp_timer_handle_t s_reconnect_timer;
 static esp_timer_handle_t s_fallback_timer;
@@ -37,40 +39,14 @@ static bool s_started;
 
 /* ------------------------------------------------------------------------- */
 
-static void generate_ap_password(char *out)
-{
-    static const char alphabet[] = "abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789";
-    uint8_t rnd[AP_PASS_LEN * 4];
-    /* RF is not running yet: enable the hardware entropy source explicitly. */
-    bootloader_random_enable();
-    esp_fill_random(rnd, sizeof(rnd));
-    bootloader_random_disable();
-    for (int i = 0; i < AP_PASS_LEN; i++) {
-        uint32_t v;
-        memcpy(&v, &rnd[i * 4], 4);
-        out[i] = alphabet[v % (sizeof(alphabet) - 1)];
-    }
-    out[AP_PASS_LEN] = '\0';
-}
-
-static void load_or_create_ap_password(void)
-{
-    if (cfg_get_str(CFG_NS_WIFI, "ap_pass", s_ap_pass, sizeof(s_ap_pass)) == ESP_OK &&
-        strlen(s_ap_pass) >= 8) {
-        return;
-    }
-    generate_ap_password(s_ap_pass);
-    cfg_set_str(CFG_NS_WIFI, "ap_pass", s_ap_pass);
-    ESP_LOGI(TAG, "generated new setup AP password (shown on serial console only)");
-}
-
 static void apply_ap_config(void)
 {
     wifi_config_t ap = { 0 };
     strlcpy((char *)ap.ap.ssid, s_st.ap_ssid, sizeof(ap.ap.ssid));
     ap.ap.ssid_len = (uint8_t)strlen(s_st.ap_ssid);
-    strlcpy((char *)ap.ap.password, s_ap_pass, sizeof(ap.ap.password));
-    ap.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    /* Open on purpose: joining it is enough, the captive portal then opens the
+     * setup page. It only runs while the device has no working Wi-Fi. */
+    ap.ap.authmode = WIFI_AUTH_OPEN;
     ap.ap.max_connection = 3;
     ap.ap.channel = 1;
     ap.ap.pmf_cfg.required = false;
@@ -105,6 +81,98 @@ static void set_ap_enabled(bool enable)
     if (enable) {
         wifi_mgr_print_ap_credentials();
     }
+}
+
+/* ------------------------------------------------------------------------- */
+/* Captive portal: DNS                                                       */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * Answers every name with the AP address while the setup AP runs. Bound to the
+ * AP address only, so the home network never sees it. Opens and closes its
+ * socket by itself as the AP comes and goes.
+ */
+static void dns_task(void *arg)
+{
+    int sock = -1;
+    uint32_t bound_ip = 0;
+    static uint8_t q[512];
+    static uint8_t r[512];
+    for (;;) {
+        esp_netif_ip_info_t info = { 0 };
+        bool want = s_st.ap_active && esp_netif_get_ip_info(s_ap_netif, &info) == ESP_OK && info.ip.addr;
+        if (sock >= 0 && (!want || info.ip.addr != bound_ip)) {
+            close(sock);
+            sock = -1;
+            ESP_LOGI(TAG, "captive portal DNS stopped");
+        }
+        if (!want) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
+        if (sock < 0) {
+            sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            struct sockaddr_in a = { .sin_family = AF_INET, .sin_port = htons(53) };
+            a.sin_addr.s_addr = info.ip.addr;
+            struct timeval tv = { .tv_sec = 1 };
+            if (sock < 0 || bind(sock, (struct sockaddr *)&a, sizeof(a)) != 0) {
+                ESP_LOGW(TAG, "captive portal DNS: cannot bind port 53");
+                if (sock >= 0) {
+                    close(sock);
+                    sock = -1;
+                }
+                vTaskDelay(pdMS_TO_TICKS(5000));
+                continue;
+            }
+            setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+            bound_ip = info.ip.addr;
+            ESP_LOGI(TAG, "captive portal DNS running on " IPSTR, IP2STR(&info.ip));
+        }
+        struct sockaddr_in from;
+        socklen_t flen = sizeof(from);
+        int n = recvfrom(sock, q, sizeof(q), 0, (struct sockaddr *)&from, &flen);
+        if (n <= 0) {
+            continue; /* timeout: re-check whether the AP still runs */
+        }
+        size_t len = captive_dns_reply(q, (size_t)n, bound_ip, r, sizeof(r));
+        if (len) {
+            sendto(sock, r, len, 0, (struct sockaddr *)&from, flen);
+        }
+    }
+}
+
+/*
+ * DHCP for the setup AP: our address as DNS server (so names resolve to the
+ * portal) and option 114 (RFC 8910, captive portal URI) for systems that ask
+ * for it instead of probing.
+ *
+ * Called before esp_wifi_start(), while the DHCP server is still in its initial
+ * state: options can only be set while it does not run, and esp-netif starts it
+ * by itself when the AP comes up - but only from that initial state, so it must
+ * not be stopped here. The options stay for every later start of the AP.
+ */
+static void setup_ap_dhcp(void)
+{
+    esp_netif_ip_info_t info;
+    if (esp_netif_get_ip_info(s_ap_netif, &info) != ESP_OK) {
+        return;
+    }
+    esp_netif_dns_info_t dns = { 0 };
+    dns.ip.type = ESP_IPADDR_TYPE_V4;
+    dns.ip.u_addr.ip4.addr = info.ip.addr;
+    esp_netif_set_dns_info(s_ap_netif, ESP_NETIF_DNS_MAIN, &dns);
+    uint8_t offer_dns = 0x02; /* OFFER_DNS */
+    esp_netif_dhcps_option(s_ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER, &offer_dns,
+                           sizeof(offer_dns));
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 0)
+    static char uri[32];
+    snprintf(uri, sizeof(uri), "http://" IPSTR "/", IP2STR(&info.ip));
+    esp_err_t err = esp_netif_dhcps_option(s_ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI, uri,
+                                           strlen(uri));
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "DHCP captive portal option: %s", esp_err_to_name(err));
+    }
+#endif
 }
 
 static void reconnect_cb(void *arg)
@@ -236,7 +304,6 @@ esp_err_t wifi_mgr_start(const char *hostname)
     if (!s_lock) {
         return ESP_ERR_NO_MEM;
     }
-    load_or_create_ap_password();
 
     ESP_ERROR_CHECK(esp_netif_init());
     esp_err_t err = esp_event_loop_create_default();
@@ -285,8 +352,10 @@ esp_err_t wifi_mgr_start(const char *hostname)
         s_st.ap_active = true;
     }
     memset(pass, 0, sizeof(pass));
+    setup_ap_dhcp();
     ESP_ERROR_CHECK(esp_wifi_start());
     s_started = true;
+    xTaskCreate(dns_task, "captive_dns", 3072, NULL, 4, NULL);
     if (s_st.ap_active) {
         wifi_mgr_print_ap_credentials();
     }
@@ -364,14 +433,13 @@ void wifi_mgr_print_ap_credentials(void)
         printf("Wi-Fi is not running (safe mode). Start it with 'wifi_start'.\n");
         return;
     }
-    /* printf on purpose: goes to UART only, never into the web log buffer. */
     printf("\n"
            "*****************************************************\n"
            "  Setup Wi-Fi   SSID    : %s\n"
-           "                Password: %s\n"
+           "                Password: none (open, setup page opens by itself)\n"
            "                URL     : http://%s/\n"
            "*****************************************************\n\n",
-           s_st.ap_ssid, s_ap_pass, s_st.ap_ip);
+           s_st.ap_ssid, s_st.ap_ip);
     fflush(stdout);
 }
 
@@ -382,4 +450,50 @@ bool wifi_mgr_is_ap_local_ip(uint32_t ipv4)
         return false;
     }
     return info.ip.addr == ipv4;
+}
+
+esp_err_t wifi_mgr_scan(wifi_mgr_net_t *out, size_t max, size_t *count)
+{
+    *count = 0;
+    if (!s_started) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    /* Scanning needs the station interface; with the AP alone it is switched on
+     * (without connecting - there are no credentials to connect with). */
+    wifi_mode_t mode;
+    if (esp_wifi_get_mode(&mode) == ESP_OK && mode == WIFI_MODE_AP) {
+        esp_wifi_set_mode(WIFI_MODE_APSTA);
+    }
+    wifi_scan_config_t sc = { .show_hidden = false };
+    esp_err_t err = esp_wifi_scan_start(&sc, true);
+    if (err != ESP_OK) {
+        return err; /* e.g. ESP_ERR_WIFI_STATE while a connection attempt runs */
+    }
+    uint16_t n = 24;
+    wifi_ap_record_t *recs = calloc(n, sizeof(*recs));
+    if (!recs) {
+        esp_wifi_clear_ap_list();
+        return ESP_ERR_NO_MEM;
+    }
+    err = esp_wifi_scan_get_ap_records(&n, recs);
+    for (uint16_t i = 0; err == ESP_OK && i < n; i++) {
+        const char *ssid = (const char *)recs[i].ssid;
+        if (!ssid[0]) {
+            continue;
+        }
+        /* One entry per name; the list is sorted by signal, so the first is the strongest. */
+        bool dup = false;
+        for (size_t k = 0; k < *count; k++) {
+            dup = dup || strcmp(out[k].ssid, ssid) == 0;
+        }
+        if (dup || *count >= max) {
+            continue;
+        }
+        strlcpy(out[*count].ssid, ssid, sizeof(out[*count].ssid));
+        out[*count].rssi = recs[i].rssi;
+        out[*count].open = recs[i].authmode == WIFI_AUTH_OPEN;
+        (*count)++;
+    }
+    free(recs);
+    return err;
 }

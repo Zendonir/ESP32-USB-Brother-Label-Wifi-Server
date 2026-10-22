@@ -249,7 +249,7 @@ void console_start(void)
           .func = cmd_wifi_clear },
         { .command = "wifi_start", .help = "Start Wi-Fi and web server (after a safe-mode boot)",
           .func = cmd_wifi_start },
-        { .command = "ap_info", .help = "Show SSID and password of the setup access point", .func = cmd_ap_info },
+        { .command = "ap_info", .help = "Show SSID and address of the setup access point", .func = cmd_ap_info },
         { .command = "log", .help = "Print the buffered log (as shown in the web interface)", .func = cmd_log },
         { .command = "log_level", .hint = "<tag|*> <level>", .help = "Change the log level at runtime",
           .func = cmd_log_level },
