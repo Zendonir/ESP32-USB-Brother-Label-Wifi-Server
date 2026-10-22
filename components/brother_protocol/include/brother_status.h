@@ -27,6 +27,7 @@ extern "C" {
 #define BROTHER_CMD_INVALIDATE      0x00
 #define BROTHER_CMD_INITIALIZE      "\x1b\x40"      /* ESC @ */
 #define BROTHER_CMD_STATUS_REQUEST  "\x1b\x69\x53"  /* ESC i S */
+#define BROTHER_CMD_RASTER_MODE     "\x1b\x69\x61\x01"  /* ESC i a 01h: switch to raster mode */
 
 /* Error information 1 (offset 8) */
 #define BROTHER_ERR1_NO_MEDIA       0x01
@@ -100,9 +101,12 @@ void brother_status_format_json(const brother_status_t *st, strbuf_t *sb);
 void brother_status_format_text(const brother_status_t *st, strbuf_t *sb);
 
 /*
- * Builds the documented status query sequence into `buf`:
- * 200 x invalidate (00h), initialize (ESC @), status information request (ESC i S).
- * Returns the number of bytes written (205) or 0 if `size` is too small.
+ * Builds the status query sequence into `buf`: 200 x invalidate (00h),
+ * initialize (ESC @), raster mode (ESC i a 01h), status information request
+ * (ESC i S). A TD-2020A whose stored command mode is P-touch Template does not
+ * answer ESC i S until something switches it to raster mode (until power-off);
+ * every print job does that too, so it changes nothing else.
+ * Returns the number of bytes written (209) or 0 if `size` is too small.
  */
 size_t brother_build_status_query(uint8_t *buf, size_t size);
 

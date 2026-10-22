@@ -74,16 +74,16 @@ int main(int argc, char **argv)
     d[2] = 'X';
     CHECK(!brother_status_parse(d, sizeof(d), &st));
 
-    /* documented query sequence: 200 x 00h, ESC @, ESC i S */
+    /* query sequence: 200 x 00h, ESC @, ESC i a 01h (raster mode), ESC i S */
     uint8_t q[256];
     size_t n = brother_build_status_query(q, sizeof(q));
-    CHECK(n == 205);
+    CHECK(n == 209);
     int zeros = 1;
     for (int i = 0; i < 200; i++) {
         zeros &= q[i] == 0x00;
     }
     CHECK(zeros);
-    CHECK(memcmp(q + 200, "\x1b\x40\x1b\x69\x53", 5) == 0);
+    CHECK(memcmp(q + 200, "\x1b\x40\x1b\x69\x61\x01\x1b\x69\x53", 9) == 0);
     CHECK(brother_build_status_query(q, 100) == 0);
 
     /* settings: documented static commands (P-touch Template reference, chapter 8) */

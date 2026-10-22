@@ -190,13 +190,14 @@ void brother_status_format_text(const brother_status_t *st, strbuf_t *sb)
 
 size_t brother_build_status_query(uint8_t *buf, size_t size)
 {
-    const size_t n = BROTHER_INVALIDATE_LEN + 2 + 3;
+    const size_t n = BROTHER_INVALIDATE_LEN + 2 + 4 + 3;
     if (size < n) {
         return 0;
     }
     memset(buf, BROTHER_CMD_INVALIDATE, BROTHER_INVALIDATE_LEN);
     memcpy(buf + BROTHER_INVALIDATE_LEN, BROTHER_CMD_INITIALIZE, 2);
-    memcpy(buf + BROTHER_INVALIDATE_LEN + 2, BROTHER_CMD_STATUS_REQUEST, 3);
+    memcpy(buf + BROTHER_INVALIDATE_LEN + 2, BROTHER_CMD_RASTER_MODE, 4);
+    memcpy(buf + BROTHER_INVALIDATE_LEN + 6, BROTHER_CMD_STATUS_REQUEST, 3);
     return n;
 }
 

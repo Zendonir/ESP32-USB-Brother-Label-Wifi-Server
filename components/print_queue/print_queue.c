@@ -20,6 +20,7 @@ static const char *TAG = "queue";
 #define WRITE_TIMEOUT_MS        30000   /* per 16 KiB chunk; the printer NAKs while its buffer is full */
 #define RESULT_WAIT_MS          180000  /* long multi-label jobs */
 #define RESULT_IDLE_MS          15000
+#define RESULT_FIRST_MS         20000   /* no message at all: do not hold the queue for RESULT_WAIT_MS */
 #define WAIT_POLL_MS            3000
 #define STATUS_FAILS_BEFORE_SEND 3
 
@@ -600,7 +601,7 @@ static void print_one(uint32_t id)
     memset(&log, 0, sizeof(log));
     if (err == ESP_OK) {
         set_state(id, JOB_PRINTING, "sent, waiting for printer confirmation");
-        brother_collect_statuses(RESULT_WAIT_MS, RESULT_IDLE_MS, &log);
+        brother_collect_statuses(RESULT_WAIT_MS, RESULT_IDLE_MS, RESULT_FIRST_MS, &log);
     } else if (err != ESP_ERR_NOT_FOUND) {
         brother_cancel_job();
     }

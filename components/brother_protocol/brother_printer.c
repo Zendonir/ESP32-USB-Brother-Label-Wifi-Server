@@ -133,10 +133,11 @@ out:
     return err;
 }
 
-void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, brother_status_log_t *log)
+void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, uint32_t first_ms, brother_status_log_t *log)
 {
     memset(log, 0, sizeof(*log));
-    int64_t end = esp_timer_get_time() + (int64_t)total_ms * 1000;
+    int64_t start = esp_timer_get_time();
+    int64_t end = start + (int64_t)total_ms * 1000;
     int64_t last_rx = 0;
     int64_t done_at = 0;
     while (esp_timer_get_time() < end) {
@@ -172,6 +173,10 @@ void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, brother_statu
             break;
         }
         if (last_rx && now - last_rx > (int64_t)idle_ms * 1000) {
+            break;
+        }
+        if (!last_rx && now - start > (int64_t)first_ms * 1000) {
+            ESP_LOGW(TAG, "printer sent no status within %lu s after the job", (unsigned long)(first_ms / 1000));
             break;
         }
     }

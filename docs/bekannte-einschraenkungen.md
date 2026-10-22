@@ -49,6 +49,10 @@ Ein Testdruck mit einer Datei des Originaltreibers wurde gedruckt; der Drucker h
   nicht abgebrochen werden; weitere Control-Anfragen werden dann bis zum Abstecken abgelehnt
   (Logmeldung `control request … timed out`).
 - Eine erfolgreiche USB-Übertragung bestätigt **nicht**, dass ein Etikett gedruckt wurde.
+- Meldet der Drucker nach einem Auftrag 20 s lang gar nichts (keine Statusnachricht), gilt der
+  Auftrag als „unbestätigt“ und der nächste wird gesendet – vorher hielt so ein Auftrag die
+  Schlange 180 s auf. Die Statusabfrage schaltet den Drucker vorher in den Rastermodus
+  (`ESC i a 01h`), weil er im P-touch-Template-Modus `ESC i S` nicht beantwortet.
 - Im Mischbetrieb (Setup-AP + Verbindungsversuche zum Heim-WLAN) wechselt der AP kurz den
   Kanal; Clients am Setup-AP können dabei kurz getrennt werden. Die Firmware versucht dann nur
   alle 15 s neu zu verbinden.

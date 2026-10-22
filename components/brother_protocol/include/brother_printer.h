@@ -31,7 +31,10 @@ esp_err_t brother_query_status(brother_status_t *out);
  * Reads status messages the printer sends on its own (phase changes,
  * "printing completed", errors) for up to `total_ms`. Stops early on an error,
  * 3 s after "printing completed" + "waiting to receive" if no further page
- * starts, or after `idle_ms` without any message once one was received.
+ * starts, after `idle_ms` without any message once one was received, or after
+ * `first_ms` if the printer has not sent a single message (it reports
+ * "printing" as soon as it starts - a silent printer would otherwise hold the
+ * queue for `total_ms` per job).
  * The caller must hold usb_printer_job_begin().
  */
 typedef struct {
@@ -41,7 +44,7 @@ typedef struct {
     bool error;                 /* status type 02h received or error bits set */
 } brother_status_log_t;
 
-void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, brother_status_log_t *log);
+void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, uint32_t first_ms, brother_status_log_t *log);
 
 /*
  * Aborts a partially transmitted job as the reference describes: invalidate
