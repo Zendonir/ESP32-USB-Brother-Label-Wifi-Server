@@ -211,6 +211,53 @@ paths:
         '200': { description: Stored, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
         '400': { description: Invalid input, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
         '403': { description: Not connected through the setup AP, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+  /api/wifi/scan:
+    get:
+      summary: Networks in range, one entry per SSID, strongest first (setup AP only, firmware >= 0.5.0)
+      responses:
+        '200':
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  networks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ssid: { type: string }
+                        rssi: { type: integer }
+                        open: { type: boolean }
+        '403': { description: Not connected through the setup AP, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        '409': { description: Scan not possible right now (connection attempt running), content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+  /api/system/ota:
+    post:
+      summary: Firmware update - body is brother_printserver.bin (home network only, firmware >= 0.5.0)
+      description: >
+        Written to the inactive OTA slot, verified (project name, image format, checksum), then
+        activated; the device restarts. A firmware that does not start is rolled back by the bootloader.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '200':
+          description: Installed, restarting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  message: { type: string }
+                  version: { type: string }
+        '400': { description: Not a firmware of this print server or damaged, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        '403': { description: Request came through the open setup AP, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        '413': { description: Size does not fit an app image, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
   /api/system/restart:
     post:
       summary: Restart the device (setup AP only)
@@ -354,6 +401,14 @@ components:
             ap_clients: { type: integer }
             hostname: { type: string }
             via_setup_ap: { type: boolean }
+        ota:
+          type: object
+          description: Firmware update over the web (>= 0.5.0)
+          properties:
+            available: { type: boolean }
+            allowed: { type: boolean, description: false when the request came through the setup AP }
+            running: { type: string, description: running OTA partition }
+            max_bytes: { type: integer }
         printer:
           type: object
           properties:

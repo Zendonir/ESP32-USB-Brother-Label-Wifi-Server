@@ -1,3 +1,3 @@
-idf_component_register(SRCS "wifi_manager.c"
+idf_component_register(SRCS "wifi_manager.c" "captive_dns.c"
                        INCLUDE_DIRS "include"
-                       PRIV_REQUIRES esp_wifi esp_netif esp_event esp_timer bootloader_support configuration)
+                       PRIV_REQUIRES esp_wifi esp_netif esp_event esp_timer lwip configuration)

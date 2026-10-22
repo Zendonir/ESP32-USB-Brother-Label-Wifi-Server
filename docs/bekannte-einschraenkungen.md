@@ -34,10 +34,12 @@ Ein Testdruck mit einer Datei des Originaltreibers wurde gedruckt; der Drucker h
 - Nur ein USB-Gerät, direkt angeschlossen (keine Hubs).
 - Nur die aktive USB-Konfiguration wird ausgelesen (Gerät mit `bNumConfigurations > 1`
   wird im Bericht markiert).
-- Keine WLAN-Netzsuche, keine statische IP, kein Hostname-Editor im Web (Phase 6).
-- Kein API-Key: Die Diagnose-API ist **lesend**; schreibende Endpunkte (WLAN, Neustart) sind
-  nur über das Setup-WLAN erreichbar.
-- OTA ist vorbereitet (zwei OTA-Partitionen, Rollback aktiv), aber noch kein Upload (Phase 7).
+- Keine statische IP, kein Hostname-Editor im Web (Phase 6). Die WLAN-Suche gibt es nur im Setup-WLAN.
+- Kein API-Key: WLAN-Daten und Neustart nur über das Setup-WLAN. Druckaufträge, Druckereinstellungen
+  und das **Firmware-Update** nimmt das Gerät von jedem im Heimnetz an (nicht über das Setup-WLAN).
+  Wer im Heimnetz ist, kann also eine andere Firmware aufspielen – sie muss nur den Projektnamen
+  `brother_printserver` tragen. Kein Secure Boot, keine Signaturprüfung.
+- Firmware-Update: laufende Druckaufträge (RAM) gehen beim Neustart verloren.
 
 ## Technische Grenzen
 
@@ -50,10 +52,14 @@ Ein Testdruck mit einer Datei des Originaltreibers wurde gedruckt; der Drucker h
 - Im Mischbetrieb (Setup-AP + Verbindungsversuche zum Heim-WLAN) wechselt der AP kurz den
   Kanal; Clients am Setup-AP können dabei kurz getrennt werden. Die Firmware versucht dann nur
   alle 15 s neu zu verbinden.
-- WLAN-Passwort und Setup-AP-Passwort liegen unverschlüsselt im NVS (keine Flash-/NVS-
-  Verschlüsselung in dieser Phase). Wer physischen Zugriff auf das Board hat, kann sie auslesen.
-- Das Setup-AP-Passwort wird nur auf der seriellen Konsole angezeigt (Befehl `ap_info`).
-  Ohne serielle Konsole ist die Ersteinrichtung in dieser Phase nicht möglich.
+- Das WLAN-Passwort liegt unverschlüsselt im NVS (keine Flash-/NVS-Verschlüsselung).
+  Wer physischen Zugriff auf das Board hat, kann es auslesen.
+- Das Setup-WLAN ist **offen** (ab 0.5.0). Solange es läuft (keine WLAN-Verbindung: erste
+  Einrichtung oder 120 s ohne Verbindung), kann jeder in Reichweite die WLAN-Daten setzen und
+  das Gerät damit in ein fremdes Netz schicken. Der Verkehr im Setup-WLAN ist unverschlüsselt –
+  auch das eingegebene Heim-WLAN-Passwort.
+- Captive Portal: Manche Systeme öffnen die Seite nicht selbst (z. B. mit fest eingestelltem
+  privatem DNS oder VPN). Dann `http://192.168.4.1/` von Hand öffnen.
 - Die BOOT-Taste (GPIO0) als WLAN-Reset ist für DevKitC-1-kompatible Boards angenommen;
   bei abweichender Belegung `CONFIG_APP_RESET_BUTTON_GPIO` anpassen oder `-1` setzen.
 

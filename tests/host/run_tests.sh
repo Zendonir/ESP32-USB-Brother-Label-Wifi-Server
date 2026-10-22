@@ -17,6 +17,10 @@ CC="${CC:-gcc}"
     "$root/components/common_util/strbuf.c" "$root/components/brother_protocol/brother_status.c" \
     "$here/test_brother_status.c" -o "$out/test_brother_status"
 "$out/test_brother_status" "$out"
+"$CC" -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer \
+    -I"$root/components/wifi_manager/include" \
+    "$root/components/wifi_manager/captive_dns.c" "$here/test_captive_dns.c" -o "$out/test_captive_dns"
+"$out/test_captive_dns"
 for f in "$out"/*.json; do
     python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$f" || { echo "invalid JSON: $f"; exit 1; }
 done

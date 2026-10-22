@@ -11,9 +11,11 @@
 #include "print_queue.h"
 #include "raw_tcp_server.h"
 #include "esp_app_desc.h"
+#include "esp_app_format.h"
 #include "esp_heap_caps.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -304,6 +306,16 @@ static esp_err_t h_status(httpd_req_t *req)
 
     /* What senders such as the Lebensmittel-Server check before using the print API:
      * job_key = X-Job-Key is honoured (no duplicate label after a repeated request). */
+#if CONFIG_WEB_OTA_ENABLE
+    const esp_partition_t *next = esp_ota_get_next_update_partition(NULL);
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    sb_printf(&sb, "\"ota\":{\"available\":%s,\"allowed\":%s,\"running\":\"%s\",\"max_bytes\":%lu},",
+              next ? "true" : "false", request_via_setup_ap(req) ? "false" : "true",
+              running ? running->label : "", next ? (unsigned long)next->size : 0UL);
+#else
+    sb_puts(&sb, "\"ota\":{\"available\":false,\"allowed\":false},");
+#endif
+
     sb_printf(&sb, "\"print_api\":{\"version\":1,\"job_name\":true,\"job_key\":true,\"settings\":true,"
               "\"max_job_bytes\":%d},",
               CONFIG_PRINT_QUEUE_MAX_JOB_BYTES);
@@ -484,6 +496,53 @@ static esp_err_t h_wifi_set(httpd_req_t *req)
     return send_json_msg(req, "200 OK", true, "credentials stored, connecting");
 }
 
+/* GET /api/wifi/scan - networks in range, for the setup page (setup AP only). */
+static esp_err_t h_wifi_scan(httpd_req_t *req)
+{
+    if (!request_via_setup_ap(req)) {
+        return send_json_msg(req, "403 Forbidden", false, "network scan is only available on the setup access point");
+    }
+    wifi_mgr_net_t nets[20];
+    size_t n = 0;
+    esp_err_t err = wifi_mgr_scan(nets, sizeof(nets) / sizeof(nets[0]), &n);
+    if (err != ESP_OK) {
+        return send_json_msg(req, "409 Conflict", false, "scan not possible right now, please try again");
+    }
+    strbuf_t sb;
+    sb_init(&sb, s_resp, RESP_BUF_SIZE);
+    sb_puts(&sb, "{\"ok\":true,\"networks\":[");
+    for (size_t i = 0; i < n; i++) {
+        sb_puts(&sb, i ? ",{\"ssid\":" : "{\"ssid\":");
+        sb_json_str(&sb, nets[i].ssid);
+        sb_printf(&sb, ",\"rssi\":%d,\"open\":%s}", nets[i].rssi, nets[i].open ? "true" : "false");
+    }
+    sb_puts(&sb, "]}");
+    return send_json(req, &sb);
+}
+
+/*
+ * Captive portal: anything unknown that arrives over the setup AP (the
+ * connectivity checks of phones and laptops, e.g. /generate_204 or
+ * /hotspot-detect.html) is redirected to the setup page. That redirect is
+ * what makes the operating system open the portal window by itself.
+ */
+static esp_err_t h_not_found(httpd_req_t *req, httpd_err_code_t code)
+{
+    if (!request_via_setup_ap(req)) {
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
+        return ESP_FAIL;
+    }
+    wifi_mgr_status_t w;
+    wifi_mgr_get_status(&w);
+    char loc[32];
+    snprintf(loc, sizeof(loc), "http://%s/", w.ap_ip);
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_hdr(req, "Location", loc);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_type(req, "text/html");
+    return httpd_resp_sendstr(req, "<a href=\"/\">Printserver setup</a>");
+}
+
 static void restart_task(void *arg)
 {
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -500,6 +559,121 @@ static esp_err_t h_restart(httpd_req_t *req)
     xTaskCreate(restart_task, "restart", 2048, NULL, 5, NULL);
     return ESP_OK;
 }
+
+#if CONFIG_WEB_OTA_ENABLE
+/*
+ * POST /api/system/ota - body: the app image (brother_printserver.bin from the
+ * release, application/octet-stream). Written to the other OTA slot, checked
+ * (image format, checksum, project name), then the device restarts into it.
+ * If the new firmware does not come up, the bootloader returns to this one
+ * (rollback; the app marks itself valid after a successful start).
+ *
+ * Not over the setup AP: it is open, and whoever happens to be in range must
+ * not be able to replace the firmware.
+ */
+static esp_err_t h_ota(httpd_req_t *req)
+{
+    if (request_via_setup_ap(req)) {
+        return send_json_msg(req, "403 Forbidden", false,
+                             "firmware updates are not accepted over the open setup Wi-Fi; "
+                             "connect the device to your network first");
+    }
+    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
+    if (!part) {
+        return send_json_msg(req, "500 Internal Server Error", false, "no OTA partition");
+    }
+    const size_t desc_off = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t);
+    const size_t head_len = desc_off + sizeof(esp_app_desc_t);
+    if (req->content_len < head_len || req->content_len > part->size) {
+        return send_json_msg(req, "413 Payload Too Large", false, "file is not an app image of a suitable size");
+    }
+    esp_ota_handle_t ota = 0;
+    esp_err_t err = esp_ota_begin(part, OTA_WITH_SEQUENTIAL_WRITES, &ota);
+    if (err != ESP_OK) {
+        return send_json_msg(req, "500 Internal Server Error", false, esp_err_to_name(err));
+    }
+    ESP_LOGW(TAG, "firmware update: receiving %u bytes into %s", (unsigned)req->content_len, part->label);
+    static uint8_t chunk[4096];
+    static uint8_t head[sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t)];
+    size_t got = 0;
+    const char *fail = NULL;
+    bool lost = false;
+    while (!fail && got < req->content_len) {
+        size_t want = req->content_len - got;
+        int r = httpd_req_recv(req, (char *)chunk, want < sizeof(chunk) ? want : sizeof(chunk));
+        if (r == HTTPD_SOCK_ERR_TIMEOUT) {
+            continue;
+        }
+        if (r <= 0) {
+            fail = "connection lost during upload";
+            lost = true;
+            break;
+        }
+        if (got < head_len) {
+            size_t n = head_len - got < (size_t)r ? head_len - got : (size_t)r;
+            memcpy(head + got, chunk, n);
+            if (got + n == head_len) {
+                /* Before anything is activated: is this an app of this print server? A
+                 * "-merged.bin" starts with the bootloader and fails here. */
+                const esp_app_desc_t *d = (const esp_app_desc_t *)(head + desc_off);
+                if (head[0] != ESP_IMAGE_HEADER_MAGIC || d->magic_word != ESP_APP_DESC_MAGIC_WORD ||
+                    strncmp(d->project_name, esp_app_get_description()->project_name,
+                            sizeof(d->project_name)) != 0) {
+                    fail = "not a firmware of this print server (use brother_printserver.bin, "
+                           "not the -merged.bin)";
+                }
+            }
+        }
+        if (!fail && esp_ota_write(ota, chunk, (size_t)r) != ESP_OK) {
+            fail = "writing to flash failed";
+        }
+        got += (size_t)r;
+    }
+    if (fail) {
+        esp_ota_abort(ota);
+        ESP_LOGW(TAG, "firmware update aborted: %s", fail);
+        if (lost) {
+            return ESP_FAIL;
+        }
+        /* Drop the rest of the upload so that the browser receives the answer. */
+        while (got < req->content_len) {
+            size_t want = req->content_len - got;
+            int r = httpd_req_recv(req, (char *)chunk, want < sizeof(chunk) ? want : sizeof(chunk));
+            if (r == HTTPD_SOCK_ERR_TIMEOUT) {
+                continue;
+            }
+            if (r <= 0) {
+                return ESP_FAIL;
+            }
+            got += (size_t)r;
+        }
+        return send_json_msg(req, "400 Bad Request", false, fail);
+    }
+    err = esp_ota_end(ota); /* verifies the image (format, chip, checksum/hash) */
+    if (err == ESP_OK) {
+        err = esp_ota_set_boot_partition(part);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "firmware update rejected: %s", esp_err_to_name(err));
+        return send_json_msg(req, "400 Bad Request", false,
+                             err == ESP_ERR_OTA_VALIDATE_FAILED ? "image is damaged or not for this chip"
+                                                                : esp_err_to_name(err));
+    }
+    const esp_app_desc_t *d = (const esp_app_desc_t *)(head + desc_off);
+    char version[sizeof(d->version) + 1];
+    memcpy(version, d->version, sizeof(d->version));
+    version[sizeof(d->version)] = '\0';
+    ESP_LOGW(TAG, "firmware update: version %s installed, restarting", version);
+    strbuf_t sb;
+    sb_init(&sb, s_resp, RESP_BUF_SIZE);
+    sb_puts(&sb, "{\"ok\":true,\"message\":\"installed, restarting\",\"version\":");
+    sb_json_str(&sb, version);
+    sb_putc(&sb, '}');
+    send_json(req, &sb);
+    xTaskCreate(restart_task, "restart", 2048, NULL, 5, NULL);
+    return ESP_OK;
+}
+#endif
 
 /* Receives the request body into a spool. Returns NULL on success, else a reason. */
 static const char *receive_job(httpd_req_t *req, print_spool_t *sp, bool *connection_lost)
@@ -780,7 +954,11 @@ esp_err_t web_server_start(void)
         { .uri = "/api/jobs/*",      .method = HTTP_DELETE, .handler = h_job },
         { .uri = "/api/jobs/*",      .method = HTTP_POST, .handler = h_job },
         { .uri = "/api/wifi",        .method = HTTP_POST, .handler = h_wifi_set },
+        { .uri = "/api/wifi/scan",   .method = HTTP_GET,  .handler = h_wifi_scan },
         { .uri = "/api/system/restart", .method = HTTP_POST, .handler = h_restart },
+#if CONFIG_WEB_OTA_ENABLE
+        { .uri = "/api/system/ota",  .method = HTTP_POST, .handler = h_ota },
+#endif
 #if CONFIG_DIAG_ENABLE_RAW_SEND
         { .uri = "/api/diag/raw",    .method = HTTP_POST, .handler = h_diag_raw },
 #endif
@@ -788,6 +966,7 @@ esp_err_t web_server_start(void)
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
         httpd_register_uri_handler(srv, &uris[i]);
     }
+    httpd_register_err_handler(srv, HTTPD_404_NOT_FOUND, h_not_found);
     ESP_LOGI(TAG, "HTTP server listening on port %d", cfg.server_port);
     return ESP_OK;
 }

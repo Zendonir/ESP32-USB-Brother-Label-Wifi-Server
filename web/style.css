@@ -100,3 +100,9 @@ th { color: var(--muted); font-weight: 500; }
 .api { padding-left: 18px; }
 .api li { margin-bottom: 4px; }
 footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 16px; }
+
+.nets { list-style: none; padding: 0; margin: 8px 0 12px; }
+.nets li { margin: 4px 0; }
+.nets .net { width: 100%; display: flex; justify-content: space-between; gap: 8px; text-align: left;
+  background: transparent; color: inherit; border: 1px solid var(--border); }
+progress { width: 100%; }

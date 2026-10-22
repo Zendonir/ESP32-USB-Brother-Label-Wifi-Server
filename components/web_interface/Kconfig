@@ -10,4 +10,13 @@ menu "Diagnostic web interface"
             accepts print data from the local network); 'raw_send off' on the
             serial console disables it until restart.
 
+    config WEB_OTA_ENABLE
+        bool "Firmware update over the web interface (POST /api/system/ota)"
+        default y
+        help
+            Upload of brother_printserver.bin from the web interface. Accepted
+            only from the home network, never over the open setup access point.
+            The image is verified before it is activated; a firmware that does
+            not start is rolled back by the bootloader.
+
 endmenu

@@ -39,7 +39,13 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 
 | ID | Test | Erwartet | Status |
 |---|---|---|---|
-| C1 | Erster Start | Setup-WLAN `Brother-PrintServer-Setup-XXXX` mit 12-stelligem Passwort (nur Konsole) | ✅ (21.10.2026, mit ausreichender Versorgung) |
+| C1 | Erster Start | Setup-WLAN `Brother-PrintServer-Setup-XXXX` mit 12-stelligem Passwort (nur Konsole) | ✅ (21.10.2026, mit ausreichender Versorgung) – ab 0.5.0 siehe C9 |
+| C9 | Erster Start (ab 0.5.0) | Setup-WLAN ist **offen**, Verbinden ohne Passwort | ⏳ |
+| C10 | Captive Portal | Android, iPhone und Windows öffnen nach dem Verbinden die Einrichtungsseite von selbst (Reiter WLAN, Netzliste) | ⏳ |
+| C11 | Netzwerke suchen | Liste mit SSID und Signal, Antippen füllt die SSID | ⏳ |
+| C12 | Firmware-Update aus dem Heimnetz | `brother_printserver.bin` hochladen → Fortschritt, Neustart, neue Version in der Übersicht; WLAN-Daten bleiben | ⏳ |
+| C13 | Firmware-Update, falsche Datei | `-merged.bin` oder fremde `.bin` → `400`, alte Firmware läuft weiter | ⏳ |
+| C14 | Firmware-Update über Setup-WLAN | `403`, Knopf gesperrt mit Hinweis | ⏳ |
 | C2 | Webinterface über Setup-WLAN | `http://192.168.4.1/` lädt, DE/EN umschaltbar | ⏳ |
 | C3 | WLAN-Daten setzen (Web) | Verbindung, IP in Konsole; Setup-AP schaltet nach 60 s ab | ⏳ |
 | C4 | WLAN-Daten ändern aus dem Heimnetz | `403` (nur über Setup-AP erlaubt) | ⏳ |
