@@ -45,6 +45,7 @@ static uint32_t s_active_id;
  * jobs go out without asking first and the result wait is short; any message
  * from the printer clears it. Only touched by the worker task. */
 static bool s_silent;
+static bool s_answered;   /* the current job's status request got a reply */
 static uint32_t s_total_printed;
 static uint32_t s_total_failed;
 
@@ -526,6 +527,7 @@ static bool wait_for_printer(uint32_t id)
     int64_t start = esp_timer_get_time();
     int status_fails = 0;
     char msg[96];
+    s_answered = false;
     for (;;) {
         int c = cancel_state(id);
         if (c == 1) {
@@ -546,6 +548,7 @@ static bool wait_for_printer(uint32_t id)
         } else {
             brother_status_t st;
             esp_err_t err = brother_query_status(&st);
+            s_answered |= err == ESP_OK;
             if (err == ESP_OK && !brother_status_has_error(&st)) {
                 return true;
             }
@@ -612,10 +615,13 @@ static void print_one(uint32_t id)
         set_state(id, JOB_PRINTING, "sent, waiting for printer confirmation");
         brother_collect_statuses(RESULT_WAIT_MS, RESULT_IDLE_MS, s_silent ? SILENT_FIRST_MS : RESULT_FIRST_MS,
                                  &log);
-        if (log.count == 0 && !s_silent) {
+        /* Silent only if it answered neither the status request nor after the job;
+         * a printer that answers requests keeps its paper/cover check before each job. */
+        bool silent = log.count == 0 && !s_answered;
+        if (silent && !s_silent) {
             ESP_LOGW(TAG, "printer sends no status: next jobs go out without waiting for it");
         }
-        s_silent = log.count == 0;
+        s_silent = silent;
     } else if (err != ESP_ERR_NOT_FOUND) {
         brother_cancel_job();
     }
@@ -639,7 +645,7 @@ static void print_one(uint32_t id)
         finish(id, JOB_FAILED, msg, false, true);
     } else if (log.printing_completed) {
         finish(id, JOB_PRINTED, "printer reported printing completed", true, false);
-    } else if (log.count == 0) {
+    } else if (s_silent) {
         finish(id, JOB_UNKNOWN, "sent; the printer reports no status, so the print is not confirmed", false, false);
     } else {
         finish(id, JOB_UNKNOWN, "sent, but the printer did not confirm the print", false, false);
