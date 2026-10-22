@@ -5,6 +5,7 @@
  * or station), mDNS, the diagnostic web interface and the serial console.
  * No print data is generated or sent by this firmware on its own.
  */
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -104,9 +105,10 @@ static bool update_brownout_counter(void)
     return s_brownout_count >= BROWNOUT_SAFE_MODE_AT;
 }
 
-#if CONFIG_APP_RESET_BUTTON_GPIO >= 0
+#if CONFIG_APP_RESET_BUTTON_GPIO >= 0 || CONFIG_APP_EXT_BUTTON_GPIO >= 0
 /*
- * One button, two jobs:
+ * The BOOT button on the board and an optional external button (front panel,
+ * wired between its GPIO and GND) do the same - either may be pressed:
  *   short press (released within 2 s)  -> restart (USB host and print queue start afresh)
  *   held for 10 s                      -> erase Wi-Fi credentials and restart into the setup AP
  * Released between 2 and 10 s: nothing - a press that was neither.
@@ -116,11 +118,35 @@ static bool update_brownout_counter(void)
 #define BUTTON_SHORT_MAX_MS   2000
 #define BUTTON_WIFI_RESET_MS  10000
 
+static const int s_button_pins[] = {
+#if CONFIG_APP_RESET_BUTTON_GPIO >= 0
+    CONFIG_APP_RESET_BUTTON_GPIO,
+#endif
+#if CONFIG_APP_EXT_BUTTON_GPIO >= 0 && CONFIG_APP_EXT_BUTTON_GPIO != CONFIG_APP_RESET_BUTTON_GPIO
+    CONFIG_APP_EXT_BUTTON_GPIO,
+#endif
+};
+#define BUTTON_COUNT (sizeof(s_button_pins) / sizeof(s_button_pins[0]))
+
+static bool any_button_pressed(void)
+{
+    for (size_t i = 0; i < BUTTON_COUNT; i++) {
+        if (gpio_get_level((gpio_num_t)s_button_pins[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void reset_button_task(void *arg)
 {
-    const gpio_num_t pin = (gpio_num_t)CONFIG_APP_RESET_BUTTON_GPIO;
+    uint64_t mask = 0;
+    for (size_t i = 0; i < BUTTON_COUNT; i++) {
+        mask |= 1ULL << s_button_pins[i];
+    }
+    /* Internal pull-up: a button to GND needs no resistor. */
     gpio_config_t io = {
-        .pin_bit_mask = 1ULL << pin,
+        .pin_bit_mask = mask,
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
     };
@@ -128,7 +154,7 @@ static void reset_button_task(void *arg)
     int held_ms = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(BUTTON_POLL_MS));
-        if (gpio_get_level(pin) == 0) {
+        if (any_button_pressed()) {
             held_ms += BUTTON_POLL_MS;
             if (held_ms == BUTTON_SHORT_MAX_MS + BUTTON_POLL_MS) {
                 ESP_LOGW(TAG, "button held: keep holding for %d s to erase the Wi-Fi settings",
@@ -197,7 +223,7 @@ void app_main(void)
         ESP_ERROR_CHECK(app_start_network());
     }
 
-#if CONFIG_APP_RESET_BUTTON_GPIO >= 0
+#if CONFIG_APP_RESET_BUTTON_GPIO >= 0 || CONFIG_APP_EXT_BUTTON_GPIO >= 0
     xTaskCreate(reset_button_task, "reset_btn", 3072, NULL, 2, NULL);
 #endif
 

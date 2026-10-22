@@ -52,6 +52,7 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 | C5 | mDNS | `http://brother-td2020.local/` erreichbar | ⏳ |
 | C6 | Router aus/an | automatische Wiederverbindung, nach 120 s ohne Verbindung Setup-AP aktiv | ⏳ |
 | C7 | BOOT-Taste 10 s halten (ab 0.5.0) | WLAN-Daten gelöscht, Neustart ins offene Setup-WLAN | ⏳ |
+| C16 | Taster an GPIO4/GND (ab 0.5.1) | kurz: Neustart; 10 s: WLAN-Reset – wie die BOOT-Taste | ⏳ |
 | C15 | BOOT-Taste kurz drücken (ab 0.5.0) | Neustart, Log `button pressed: restarting`; 2–10 s halten und loslassen: nichts | ⏳ |
 | C8 | Log im Web | `/api/log` zeigt Logzeilen, **kein** Passwort | ⏳ |
 
