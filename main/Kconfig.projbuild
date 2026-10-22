@@ -23,7 +23,24 @@ menu "Brother print server"
             resistor needed). It works exactly like the BOOT button: short press =
             restart, held 10 s = Wi-Fi reset. GPIO4 is free on ESP32-S3-DevKitC-1
             boards and no strapping pin. Avoid 0, 3, 45, 46 (strapping), 19/20
-            (USB), 26-37 (flash/PSRAM), 43/44 (console) and 48 (RGB LED).
+            (USB), 26-37 (flash/PSRAM), 43/44 (console) and 38/48 (RGB LED).
+
+    config APP_RGB_LED_GPIO
+        int "GPIO of the on-board RGB LED (WS2812) that is switched off at boot (-1 = leave alone)"
+        range -1 48
+        default 48
+        help
+            ESP32-S3-DevKitC-1 v1.0 and most N16R8 clones: GPIO48. The firmware
+            does not use the LED; switched off so that it does not glow in a
+            random colour after power-up.
+
+    config APP_RGB_LED_GPIO_ALT
+        int "Second GPIO that may carry the RGB LED (-1 = none)"
+        range -1 48
+        default 38
+        help
+            DevKitC-1 v1.1 moved the LED to GPIO38. Sending "off" to a pin
+            without LED does no harm, so both are covered by default.
 
     config APP_USB_DEBUG_LOG
         bool "Log every USB attach/enumeration step (ESP-IDF tags HUB and ENUM at debug level)"
