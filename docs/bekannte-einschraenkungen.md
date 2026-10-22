@@ -53,6 +53,12 @@ Ein Testdruck mit einer Datei des Originaltreibers wurde gedruckt; der Drucker h
   Auftrag als „unbestätigt“ und der nächste wird gesendet – vorher hielt so ein Auftrag die
   Schlange 180 s auf. Die Statusabfrage schaltet den Drucker vorher in den Rastermodus
   (`ESC i a 01h`), weil er im P-touch-Template-Modus `ESC i S` nicht beantwortet.
+- Manche TD-2020A schicken über USB nie eine Statusmeldung. Hat der Drucker weder auf die
+  Abfragen vor dem Auftrag noch danach etwas gemeldet, merkt sich der Server das („stumm“):
+  Folgende Aufträge gehen ohne vorherige Abfrage hinaus, und nach dem Senden wird nur 4 s auf
+  eine Meldung gewartet. Nur das erste Etikett einer Serie braucht dann rund 26 s. Jede Meldung
+  vom Drucker hebt den Zustand wieder auf. Fehler wie „Papier leer“ bleiben so allerdings
+  unbemerkt; die Aufträge enden als „unknown“.
 - Im Mischbetrieb (Setup-AP + Verbindungsversuche zum Heim-WLAN) wechselt der AP kurz den
   Kanal; Clients am Setup-AP können dabei kurz getrennt werden. Die Firmware versucht dann nur
   alle 15 s neu zu verbinden.
