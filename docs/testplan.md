@@ -75,6 +75,7 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 | P4-7 | Mehrere Aufträge | 5 Etiketten schnell hintereinander aus Windows | 5 Aufträge nacheinander `gedruckt` | ⏳ |
 | P4-8 | Zugriffsschutz | `raw_allow 10.0.0.0/8`, aus dem Heimnetz drucken | Verbindung abgewiesen (Log), `raw_allow any` hebt auf | ⏳ |
 | P4-9 | Idempotenz (0.4.1) | `curl -H "X-Job-Key: t1" -H "X-Job-Name: Test" --data-binary @test.prn http://<ip>/api/print/raw` zweimal | 1. Antwort `202`, 2. Antwort `200` mit `"duplicate":true` und derselben Job-ID; nur **ein** Etikett; Name in der Auftragsliste | ⏳ |
+| P4-11 | Druckereinstellungen (0.4.2) | Startseite → „Vom Drucker lesen“, Befehlsmodus auf Raster, Speichern, Drucker aus/an, erneut lesen | Werte werden angezeigt (nicht „keine Antwort“), Raster bleibt nach dem Aus-/Einschalten; Brother-Tool zeigt dasselbe | ⏳ |
 | P4-10 | Lebensmittel-Server | dort *Etiketten → Brother-Drucker*: IP eintragen, `test.prn` einlesen, Testetikett | Etikett mit Rahmen; Auftrag im Server `done`, hier „Etikett TEST“ `gedruckt` | ⏳ |
 
 ## D. Spätere Phasen (Gesamtplan)

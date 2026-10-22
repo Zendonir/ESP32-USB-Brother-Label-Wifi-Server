@@ -86,6 +86,23 @@ int main(int argc, char **argv)
     CHECK(memcmp(q + 200, "\x1b\x40\x1b\x69\x53", 5) == 0);
     CHECK(brother_build_status_query(q, 100) == 0);
 
+    /* settings: documented static commands (P-touch Template reference, chapter 8) */
+    n = brother_build_settings_prefix(q, sizeof(q));
+    CHECK(n == 206 && memcmp(q + 200, "\x1b\x40\x1b\x69\x61\x01", 6) == 0);
+    CHECK(brother_build_settings_prefix(q, 10) == 0);
+    n = brother_build_setting_get('q', q, sizeof(q));
+    CHECK(n == 7 && memcmp(q, "\x1b\x69\x58\x71\x31\x00\x00", 7) == 0);
+    n = brother_build_setting_set('^', 0x01, q, sizeof(q));
+    CHECK(n == 8 && memcmp(q, "\x1b\x69\x58\x5e\x32\x01\x00\x01", 8) == 0);
+    CHECK(brother_build_setting_set('i', 1, q, 7) == 0);
+    uint8_t v = 0xff;
+    CHECK(brother_setting_parse_reply((const uint8_t *)"\x01\x00\x03", 3, &v) && v == 3);
+    CHECK(!brother_setting_parse_reply(d, sizeof(d), &v));
+    const brother_setting_def_t *mode = brother_setting_find("command_mode");
+    CHECK(mode && mode->cmd == 'i' && brother_setting_value_valid(mode, 1) && !brother_setting_value_valid(mode, 2));
+    CHECK(strcmp(brother_setting_label(mode, 3), "P-touch Template") == 0);
+    CHECK(brother_setting_find("density") == NULL);
+
     if (g_fail) {
         fprintf(stderr, "%d check(s) FAILED\n", g_fail);
         return 1;

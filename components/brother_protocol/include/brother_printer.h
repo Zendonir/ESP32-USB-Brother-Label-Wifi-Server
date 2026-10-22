@@ -50,6 +50,22 @@ void brother_collect_statuses(uint32_t total_ms, uint32_t idle_ms, brother_statu
  */
 esp_err_t brother_cancel_job(void);
 
+/*
+ * Reads and optionally writes printer settings (brother_settings[] in
+ * brother_status.h) in one session. For each entry with set_value >= 0 the
+ * setting is written first; then every entry is read back into `value`
+ * (-1 if the printer did not answer). Leaves the printer in P-touch Template
+ * mode; print jobs switch the mode themselves (ESC i a).
+ *  - ESP_ERR_INVALID_STATE: no printer, or a job is running
+ */
+typedef struct {
+    char cmd;
+    int set_value;      /* -1 = only read */
+    int value;          /* out */
+} brother_setting_io_t;
+
+esp_err_t brother_settings_exchange(brother_setting_io_t *io, size_t n);
+
 /* Last status received by any of the functions above. Returns false if none yet. */
 bool brother_get_last_status(brother_status_t *out, int64_t *age_ms);
 

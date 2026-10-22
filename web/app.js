@@ -26,6 +26,10 @@ const I18N = {
     active: 'active', inactive: 'inactive', saved: 'Saved. The device is connecting – watch the serial console ' +
       'or your router for the new IP address.', restarting: 'Restarting…', confirm_restart: 'Restart the device?',
     storage_note: 'Interface %d is Mass Storage – the printer may be in a storage/editor mode.',
+    ps_title: 'Printer settings', ps_read: 'Read from printer', ps_save: 'Save',
+    ps_hint: 'Stored in the printer. Only settings with a documented Brother command – power, density, sensors ' +
+      'and the paper size stay in the Brother tool.', ps_saved: 'Saved in the printer.',
+    ps_noanswer: 'no answer',
     label_status: 'Labels & printer status', query_status: 'Query status', st_ok: 'Ready',
     st_error: 'Error', st_none: 'Not queried yet', media: 'Media', size: 'Size', errors: 'Errors',
     phase: 'Phase', model: 'Model', age: 'Age', in_use: 'printer in use',
@@ -68,6 +72,10 @@ const I18N = {
     active: 'aktiv', inactive: 'inaktiv', saved: 'Gespeichert. Das Gerät verbindet sich – die neue IP-Adresse ' +
       'steht in der seriellen Konsole bzw. im Router.', restarting: 'Neustart…', confirm_restart: 'Gerät neu starten?',
     storage_note: 'Interface %d ist Massenspeicher – der Drucker ist evtl. in einem Speicher-/Editor-Modus.',
+    ps_title: 'Druckereinstellungen', ps_read: 'Vom Drucker lesen', ps_save: 'Speichern',
+    ps_hint: 'Werden im Drucker gespeichert. Nur Einstellungen mit dokumentiertem Brother-Befehl – Stromsparen, ' +
+      'Druckdichte, Sensoren und das Papierformat bleiben im Brother-Tool.', ps_saved: 'Im Drucker gespeichert.',
+    ps_noanswer: 'keine Antwort',
     label_status: 'Etiketten & Druckerstatus', query_status: 'Status abfragen', st_ok: 'Bereit',
     st_error: 'Fehler', st_none: 'Noch nicht abgefragt', media: 'Medium', size: 'Größe', errors: 'Fehler',
     phase: 'Phase', model: 'Modell', age: 'Alter', in_use: 'Drucker belegt',
@@ -325,6 +333,46 @@ $('usb-refresh').addEventListener('click', async () => {
   catch (e) { alert(e.message); }
 });
 $('log-refresh').addEventListener('click', loadLog);
+// Druckereinstellungen (statische Brother-Befehle, /api/printer/settings).
+// Gespeichert wird nur, was sich gegenueber dem gelesenen Stand geaendert hat.
+const PS_NAMES_DE = {
+  command_mode: 'Befehlsmodus', print_priority: 'Druckpriorität', rotate: 'Druck um 180° drehen',
+  stop_position: 'Stoppposition', recovery: 'Nach Fehler erneut drucken',
+};
+const PS_LABELS_DE = {
+  Speed: 'Geschwindigkeit', Quality: 'Qualität', 'No rotation': 'nicht drehen', '180 degrees': '180°',
+  'Tear bar': 'Abreißkante', Head: 'Druckkopf', Off: 'aus', On: 'ein',
+};
+let psLast = null;
+function renderSettings(r) {
+  psLast = r.settings;
+  $('ps-list').innerHTML = r.settings.map((s) => {
+    const opts = s.options.map((o) => `<option value="${o.value}" ${o.value === s.value ? 'selected' : ''}>` +
+      `${esc(lang === 'de' ? (PS_LABELS_DE[o.label] || o.label) : o.label)}</option>`).join('');
+    const none = s.value < 0 ? `<option value="" selected>– ${esc(t('ps_noanswer'))} –</option>` : '';
+    return `<dt>${esc(lang === 'de' ? (PS_NAMES_DE[s.key] || s.name) : s.name)}</dt>` +
+      `<dd><select data-ps="${esc(s.key)}">${none}${opts}</select></dd>`;
+  }).join('');
+}
+async function loadSettings() {
+  $('ps-msg').textContent = '';
+  try { renderSettings(await api('/api/printer/settings')); } catch (e) { $('ps-msg').textContent = e.message; }
+}
+$('ps-read').addEventListener('click', loadSettings);
+$('ps-save').addEventListener('click', async () => {
+  const changed = [...document.querySelectorAll('select[data-ps]')].filter((el) => {
+    const old = (psLast || []).find((s) => s.key === el.dataset.ps);
+    return el.value !== '' && (!old || String(old.value) !== el.value);
+  });
+  if (!changed.length) return;
+  const body = changed.map((el) => `${encodeURIComponent(el.dataset.ps)}=${encodeURIComponent(el.value)}`).join('&');
+  try {
+    renderSettings(await api('/api/printer/settings', { method: 'POST', body,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }));
+    $('ps-msg').textContent = t('ps_saved');
+  } catch (e) { $('ps-msg').textContent = e.message; }
+});
+
 $('bq').addEventListener('click', async () => {
   try { const r = await api('/api/printer/status'); renderBrother(r.printer); }
   catch (e) { alert(e.message); }
