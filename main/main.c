@@ -21,6 +21,7 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "led_strip.h"
 #include "mdns.h"
 #include "print_queue.h"
 #include "raw_tcp_server.h"
@@ -182,6 +183,28 @@ static void reset_button_task(void *arg)
 }
 #endif
 
+/*
+ * The RGB LED (WS2812) on the board is not used. Its data line floats at
+ * power-up, so it may light up in some colour and stay that way - send it a
+ * single "off" frame. Its colour latches, nothing has to keep running.
+ * The red power LED is wired to the supply and cannot be switched off.
+ */
+static void rgb_led_off(int gpio)
+{
+    if (gpio < 0) {
+        return;
+    }
+    led_strip_config_t strip = { .strip_gpio_num = gpio, .max_leds = 1 };
+    led_strip_rmt_config_t rmt = { .resolution_hz = 10 * 1000 * 1000 };
+    led_strip_handle_t led = NULL;
+    if (led_strip_new_rmt_device(&strip, &rmt, &led) != ESP_OK) {
+        ESP_LOGW(TAG, "RGB LED on GPIO%d: could not be switched off", gpio);
+        return;
+    }
+    led_strip_clear(led);
+    led_strip_del(led);
+}
+
 void app_main(void)
 {
     /* Mirror the log into RAM first so that early messages appear in the web interface. */
@@ -192,6 +215,11 @@ void app_main(void)
              app->idf_ver);
 
     ESP_ERROR_CHECK(cfg_init());
+
+    rgb_led_off(CONFIG_APP_RGB_LED_GPIO);
+#if CONFIG_APP_RGB_LED_GPIO_ALT != CONFIG_APP_RGB_LED_GPIO
+    rgb_led_off(CONFIG_APP_RGB_LED_GPIO_ALT);
+#endif
 
 #if CONFIG_APP_USB_DEBUG_LOG
     /* ESP-IDF logs a detected connection and the enumeration stages only at debug level. */

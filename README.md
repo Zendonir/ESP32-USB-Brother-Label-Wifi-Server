@@ -174,6 +174,11 @@ gleichwertig). BOOT im Betrieb drücken, nicht beim Einschalten – dann startet
 | 10 s halten | WLAN-Daten löschen, Neustart ins Setup-WLAN |
 | 2–10 s, dann loslassen | nichts |
 
+**LEDs:** Die farbige LED (WS2812, GPIO48 bzw. 38 je nach Board-Version) schaltet die Firmware
+beim Start aus (ab 0.5.2). Die rote Betriebs-LED hängt fest an der Versorgung, und die TX/RX-LEDs am
+USB-Seriell-Wandler blinken bei Konsolenausgabe – beide lassen sich nicht per Software abschalten
+(nur durch Auslöten oder Abkleben).
+
 **Taster von außen:** einen Taster (Schließer) zwischen **GPIO4** und **GND** anschließen –
 kein Widerstand nötig, der interne Pull-up ist an. Bei längeren Leitungen (> 30 cm) hilft ein
 100-nF-Kondensator parallel zum Taster gegen Störungen. Ein anderer Pin lässt sich mit
