@@ -88,7 +88,7 @@ int main(int argc, char **argv)
 
     /* settings: documented static commands (P-touch Template reference, chapter 8) */
     n = brother_build_settings_prefix(q, sizeof(q));
-    CHECK(n == 206 && memcmp(q + 200, "\x1b\x40\x1b\x69\x61\x03", 6) == 0);
+    CHECK(n == 206 && memcmp(q + 200, "\x1b\x40\x1b\x69\x61\x01", 6) == 0);
     CHECK(brother_build_settings_prefix(q, 10) == 0);
     n = brother_build_setting_get('q', q, sizeof(q));
     CHECK(n == 7 && memcmp(q, "\x1b\x69\x58\x71\x31\x00\x00", 7) == 0);

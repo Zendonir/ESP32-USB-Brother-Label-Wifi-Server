@@ -134,8 +134,10 @@ bool brother_setting_value_valid(const brother_setting_def_t *def, uint8_t value
 const char *brother_setting_label(const brother_setting_def_t *def, int value);
 
 /*
- * Prefix for a settings session: invalidate, initialize and switch to P-touch
- * Template mode (ESC i a 03h) where the ESC i X commands are interpreted.
+ * Prefix for a settings session: invalidate, initialize and switch to raster
+ * mode (ESC i a 01h). The static ESC i X commands are only executed in raster
+ * mode (P-touch Template Command Reference, 5.1 and 6.3); the reference's
+ * step back to template mode is left out because this server prints raster.
  * Returns the number of bytes (206) or 0 if `size` is too small.
  */
 size_t brother_build_settings_prefix(uint8_t *buf, size_t size);

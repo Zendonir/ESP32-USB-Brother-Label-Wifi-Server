@@ -256,7 +256,7 @@ size_t brother_build_settings_prefix(uint8_t *buf, size_t size)
     }
     memset(buf, BROTHER_CMD_INVALIDATE, BROTHER_INVALIDATE_LEN);
     memcpy(buf + BROTHER_INVALIDATE_LEN, BROTHER_CMD_INITIALIZE, 2);
-    memcpy(buf + BROTHER_INVALIDATE_LEN + 2, "\x1b\x69\x61\x03", 4);
+    memcpy(buf + BROTHER_INVALIDATE_LEN + 2, "\x1b\x69\x61\x01", 4);
     return n;
 }
 
