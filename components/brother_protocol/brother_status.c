@@ -190,7 +190,7 @@ void brother_status_format_text(const brother_status_t *st, strbuf_t *sb)
 
 size_t brother_build_status_query(uint8_t *buf, size_t size)
 {
-    const size_t n = BROTHER_INVALIDATE_LEN + 2 + 4 + 3;
+    const size_t n = BROTHER_STATUS_QUERY_LEN;
     if (size < n) {
         return 0;
     }
@@ -251,7 +251,7 @@ const char *brother_setting_label(const brother_setting_def_t *def, int value)
 
 size_t brother_build_settings_prefix(uint8_t *buf, size_t size)
 {
-    const size_t n = BROTHER_INVALIDATE_LEN + 2 + 4;
+    const size_t n = BROTHER_SETTINGS_PREFIX_LEN;
     if (size < n) {
         return 0;
     }

@@ -29,6 +29,10 @@ extern "C" {
 #define BROTHER_CMD_STATUS_REQUEST  "\x1b\x69\x53"  /* ESC i S */
 #define BROTHER_CMD_RASTER_MODE     "\x1b\x69\x61\x01"  /* ESC i a 01h: switch to raster mode */
 
+/* Lengths of the built sequences; callers size their buffers with these. */
+#define BROTHER_STATUS_QUERY_LEN    (BROTHER_INVALIDATE_LEN + 2 + 4 + 3)
+#define BROTHER_SETTINGS_PREFIX_LEN (BROTHER_INVALIDATE_LEN + 2 + 4)
+
 /* Error information 1 (offset 8) */
 #define BROTHER_ERR1_NO_MEDIA       0x01
 #define BROTHER_ERR1_END_OF_MEDIA   0x02    /* die-cut labels only */
