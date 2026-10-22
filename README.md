@@ -165,13 +165,21 @@ den NVS-Bereich (WLAN-Daten).
 4. WLAN-Daten zurücksetzen: **BOOT-Taste im Betrieb 10 s halten** (oder Konsole `wifi_clear`).
    Danach startet das Gerät mit dem offenen Setup-WLAN, alles lässt sich neu eingeben.
 
-**BOOT-Taste im Betrieb** (nicht beim Einschalten – dann startet der Download-Modus):
+**Taste** – die BOOT-Taste auf dem Board **oder** ein eigener Taster am Gehäuse (ab 0.5.1, beide
+gleichwertig). BOOT im Betrieb drücken, nicht beim Einschalten – dann startet der Download-Modus:
 
 | Drücken | Wirkung |
 |---|---|
 | kurz (unter 2 s) | Neustart – USB-Verbindung zum Drucker und Warteschlange beginnen neu, z. B. wenn etwas hängt |
 | 10 s halten | WLAN-Daten löschen, Neustart ins Setup-WLAN |
 | 2–10 s, dann loslassen | nichts |
+
+**Taster von außen:** einen Taster (Schließer) zwischen **GPIO4** und **GND** anschließen –
+kein Widerstand nötig, der interne Pull-up ist an. Bei längeren Leitungen (> 30 cm) hilft ein
+100-nF-Kondensator parallel zum Taster gegen Störungen. Ein anderer Pin lässt sich mit
+`CONFIG_APP_EXT_BUTTON_GPIO` wählen (nicht 0, 3, 45, 46, 19/20, 26–37, 43/44, 48), `-1` schaltet ihn ab.
+Wer nur einen Neustart von außen will, kann einen Taster auch an **EN/RST** und GND legen – das ist
+ein Hardware-Reset ohne Firmware, kann aber keine WLAN-Daten löschen.
 
 Der Neustart setzt den Printserver zurück, nicht den Drucker selbst; hängt der TD-2020A, ihn
 aus- und einschalten. Die Warteschlange des Printservers liegt im RAM: Aufträge, die dort noch

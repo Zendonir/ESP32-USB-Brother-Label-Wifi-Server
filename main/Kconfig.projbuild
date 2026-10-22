@@ -14,6 +14,17 @@ menu "Brother print server"
             the Wi-Fi credentials and restart into the open setup access point.
             Holding it during power-up enters the ROM download mode instead.
 
+    config APP_EXT_BUTTON_GPIO
+        int "GPIO of an external button (front panel) with the same function (-1 = off)"
+        range -1 48
+        default 4
+        help
+            Wire a push button between this GPIO and GND (internal pull-up, no
+            resistor needed). It works exactly like the BOOT button: short press =
+            restart, held 10 s = Wi-Fi reset. GPIO4 is free on ESP32-S3-DevKitC-1
+            boards and no strapping pin. Avoid 0, 3, 45, 46 (strapping), 19/20
+            (USB), 26-37 (flash/PSRAM), 43/44 (console) and 48 (RGB LED).
+
     config APP_USB_DEBUG_LOG
         bool "Log every USB attach/enumeration step (ESP-IDF tags HUB and ENUM at debug level)"
         default y
