@@ -21,6 +21,7 @@ static const char *TAG = "queue";
 #define RESULT_WAIT_MS          180000  /* long multi-label jobs */
 #define RESULT_IDLE_MS          15000
 #define RESULT_FIRST_MS         20000   /* no message at all: do not hold the queue for RESULT_WAIT_MS */
+#define SILENT_FIRST_MS         4000    /* same, once the printer is known not to send status */
 #define WAIT_POLL_MS            3000
 #define STATUS_FAILS_BEFORE_SEND 3
 
@@ -38,6 +39,12 @@ static SemaphoreHandle_t s_wake;
 static uint32_t s_next_id = 1;
 static uint32_t s_next_seq = 1;
 static uint32_t s_active_id;
+/* The printer answered neither status requests nor sent anything after a job.
+ * Some TD-2020A never do. Then every job would wait for three status requests
+ * and RESULT_FIRST_MS for nothing, which made a batch of labels crawl. While set,
+ * jobs go out without asking first and the result wait is short; any message
+ * from the printer clears it. Only touched by the worker task. */
+static bool s_silent;
 static uint32_t s_total_printed;
 static uint32_t s_total_failed;
 
@@ -534,6 +541,8 @@ static bool wait_for_printer(uint32_t id)
         usb_printer_get_summary(&sum);
         if (!sum.ready) {
             strlcpy(msg, "waiting: printer not connected", sizeof(msg));
+        } else if (s_silent) {
+            return true;
         } else {
             brother_status_t st;
             esp_err_t err = brother_query_status(&st);
@@ -601,7 +610,12 @@ static void print_one(uint32_t id)
     memset(&log, 0, sizeof(log));
     if (err == ESP_OK) {
         set_state(id, JOB_PRINTING, "sent, waiting for printer confirmation");
-        brother_collect_statuses(RESULT_WAIT_MS, RESULT_IDLE_MS, RESULT_FIRST_MS, &log);
+        brother_collect_statuses(RESULT_WAIT_MS, RESULT_IDLE_MS, s_silent ? SILENT_FIRST_MS : RESULT_FIRST_MS,
+                                 &log);
+        if (log.count == 0 && !s_silent) {
+            ESP_LOGW(TAG, "printer sends no status: next jobs go out without waiting for it");
+        }
+        s_silent = log.count == 0;
     } else if (err != ESP_ERR_NOT_FOUND) {
         brother_cancel_job();
     }
@@ -625,6 +639,8 @@ static void print_one(uint32_t id)
         finish(id, JOB_FAILED, msg, false, true);
     } else if (log.printing_completed) {
         finish(id, JOB_PRINTED, "printer reported printing completed", true, false);
+    } else if (log.count == 0) {
+        finish(id, JOB_UNKNOWN, "sent; the printer reports no status, so the print is not confirmed", false, false);
     } else {
         finish(id, JOB_UNKNOWN, "sent, but the printer did not confirm the print", false, false);
     }
