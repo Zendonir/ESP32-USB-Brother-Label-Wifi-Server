@@ -105,6 +105,17 @@ static bool update_brownout_counter(void)
 }
 
 #if CONFIG_APP_RESET_BUTTON_GPIO >= 0
+/*
+ * One button, two jobs:
+ *   short press (released within 2 s)  -> restart (USB host and print queue start afresh)
+ *   held for 10 s                      -> erase Wi-Fi credentials and restart into the setup AP
+ * Released between 2 and 10 s: nothing - a press that was neither.
+ */
+#define BUTTON_POLL_MS        50
+#define BUTTON_MIN_PRESS_MS   100     /* shorter is contact bounce or noise */
+#define BUTTON_SHORT_MAX_MS   2000
+#define BUTTON_WIFI_RESET_MS  10000
+
 static void reset_button_task(void *arg)
 {
     const gpio_num_t pin = (gpio_num_t)CONFIG_APP_RESET_BUTTON_GPIO;
@@ -116,14 +127,31 @@ static void reset_button_task(void *arg)
     gpio_config(&io);
     int held_ms = 0;
     for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        held_ms = gpio_get_level(pin) == 0 ? held_ms + 100 : 0;
-        if (held_ms >= 5000) {
-            ESP_LOGW(TAG, "reset button held for 5 s: erasing Wi-Fi credentials and restarting");
-            wifi_mgr_clear_credentials();
+        vTaskDelay(pdMS_TO_TICKS(BUTTON_POLL_MS));
+        if (gpio_get_level(pin) == 0) {
+            held_ms += BUTTON_POLL_MS;
+            if (held_ms == BUTTON_SHORT_MAX_MS + BUTTON_POLL_MS) {
+                ESP_LOGW(TAG, "button held: keep holding for %d s to erase the Wi-Fi settings",
+                         BUTTON_WIFI_RESET_MS / 1000);
+            }
+            if (held_ms >= BUTTON_WIFI_RESET_MS) {
+                ESP_LOGW(TAG, "button held for %d s: erasing Wi-Fi credentials and restarting",
+                         BUTTON_WIFI_RESET_MS / 1000);
+                wifi_mgr_clear_credentials();
+                vTaskDelay(pdMS_TO_TICKS(300));
+                esp_restart();
+            }
+            continue;
+        }
+        if (held_ms >= BUTTON_MIN_PRESS_MS && held_ms <= BUTTON_SHORT_MAX_MS) {
+            ESP_LOGW(TAG, "button pressed: restarting");
             vTaskDelay(pdMS_TO_TICKS(300));
             esp_restart();
+        } else if (held_ms > BUTTON_SHORT_MAX_MS) {
+            ESP_LOGI(TAG, "button released after %d ms: nothing done (short press = restart, "
+                     "%d s = Wi-Fi reset)", held_ms, BUTTON_WIFI_RESET_MS / 1000);
         }
+        held_ms = 0;
     }
 }
 #endif

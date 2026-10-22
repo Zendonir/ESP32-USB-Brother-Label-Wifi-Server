@@ -51,7 +51,8 @@ Bei jedem Test bitte Konsolenausgabe bzw. `GET /api/usb` sichern.
 | C4 | WLAN-Daten ändern aus dem Heimnetz | `403` (nur über Setup-AP erlaubt) | ⏳ |
 | C5 | mDNS | `http://brother-td2020.local/` erreichbar | ⏳ |
 | C6 | Router aus/an | automatische Wiederverbindung, nach 120 s ohne Verbindung Setup-AP aktiv | ⏳ |
-| C7 | BOOT-Taste 5 s halten | WLAN-Daten gelöscht, Neustart im Setup-Modus | ⏳ |
+| C7 | BOOT-Taste 10 s halten (ab 0.5.0) | WLAN-Daten gelöscht, Neustart ins offene Setup-WLAN | ⏳ |
+| C15 | BOOT-Taste kurz drücken (ab 0.5.0) | Neustart, Log `button pressed: restarting`; 2–10 s halten und loslassen: nichts | ⏳ |
 | C8 | Log im Web | `/api/log` zeigt Logzeilen, **kein** Passwort | ⏳ |
 
 ## P3. Phase 3 – Brother-Status und Testdruck (Firmware ≥ 0.3.0)

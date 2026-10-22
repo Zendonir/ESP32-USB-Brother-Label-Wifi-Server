@@ -60,7 +60,7 @@ Ein Testdruck mit einer Datei des Originaltreibers wurde gedruckt; der Drucker h
   auch das eingegebene Heim-WLAN-Passwort.
 - Captive Portal: Manche Systeme öffnen die Seite nicht selbst (z. B. mit fest eingestelltem
   privatem DNS oder VPN). Dann `http://192.168.4.1/` von Hand öffnen.
-- Die BOOT-Taste (GPIO0) als WLAN-Reset ist für DevKitC-1-kompatible Boards angenommen;
+- Die BOOT-Taste (GPIO0) als Neustart- und WLAN-Reset-Taste ist für DevKitC-1-kompatible Boards angenommen;
   bei abweichender Belegung `CONFIG_APP_RESET_BUTTON_GPIO` anpassen oder `-1` setzen.
 
 ## Umgebung

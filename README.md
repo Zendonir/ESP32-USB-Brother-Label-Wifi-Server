@@ -162,7 +162,21 @@ den NVS-Bereich (WLAN-Daten).
    Alternativ auf der Konsole: `wifi_set "Mein WLAN" "geheim123"`; `ap_info` zeigt SSID und Adresse.
 3. Die erhaltene IP-Adresse steht in der Konsole (`connected, IP …`). Der Setup-AP schaltet
    sich 60 s nach erfolgreicher Verbindung ab. Danach: `http://brother-td2020.local/`.
-4. WLAN-Daten zurücksetzen: Konsole `wifi_clear` oder **BOOT-Taste im Betrieb 5 s halten**.
+4. WLAN-Daten zurücksetzen: **BOOT-Taste im Betrieb 10 s halten** (oder Konsole `wifi_clear`).
+   Danach startet das Gerät mit dem offenen Setup-WLAN, alles lässt sich neu eingeben.
+
+**BOOT-Taste im Betrieb** (nicht beim Einschalten – dann startet der Download-Modus):
+
+| Drücken | Wirkung |
+|---|---|
+| kurz (unter 2 s) | Neustart – USB-Verbindung zum Drucker und Warteschlange beginnen neu, z. B. wenn etwas hängt |
+| 10 s halten | WLAN-Daten löschen, Neustart ins Setup-WLAN |
+| 2–10 s, dann loslassen | nichts |
+
+Der Neustart setzt den Printserver zurück, nicht den Drucker selbst; hängt der TD-2020A, ihn
+aus- und einschalten. Die Warteschlange des Printservers liegt im RAM: Aufträge, die dort noch
+warteten, schickt der Lebensmittel-Server neu; einer, der gerade druckte, steht dort danach als
+„Ergebnis unbekannt“ (nachdrucken von Hand).
 
 Aus Sicherheitsgründen lassen sich WLAN-Daten und Neustart über das Web **nur** aus dem
 Setup-WLAN heraus ändern, nicht aus dem Heimnetz. Umgekehrt nimmt das Gerät ein

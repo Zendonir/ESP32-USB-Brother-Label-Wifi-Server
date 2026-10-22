@@ -5,11 +5,13 @@ menu "Brother print server"
         default "brother-td2020"
 
     config APP_RESET_BUTTON_GPIO
-        int "GPIO of the button that resets Wi-Fi settings when held for 5 s (-1 = off)"
+        int "GPIO of the button: short press = restart, held 10 s = Wi-Fi reset (-1 = off)"
         range -1 48
         default 0
         help
             GPIO0 is the BOOT button on ESP32-S3-DevKitC-1 compatible boards.
+            Short press (released within 2 s): restart. Held for 10 s: erase
+            the Wi-Fi credentials and restart into the open setup access point.
             Holding it during power-up enters the ROM download mode instead.
 
     config APP_USB_DEBUG_LOG
